@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="My personal dashboard" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Dashboard</title>
+    <script>
+      // Runs before the page paints so dark mode never flashes white.
+      // Reads the theme cache that src/storage.ts keeps in localStorage.
+      try {
+        var t = localStorage.getItem('dash.themeCache') || 'system'
+        var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
