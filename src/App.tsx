@@ -1,6 +1,7 @@
 import { useSettings } from './lib/settings'
 import { useTheme } from './lib/useTheme'
 import { Header } from './sections/Header'
+import { SECTIONS } from './sections'
 
 export default function App() {
   const { settings, loaded } = useSettings()
@@ -13,8 +14,12 @@ export default function App() {
   return (
     <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
       <Header onOpenSettings={() => {}} />
-      <main className="grid gap-4 md:grid-cols-2">
-        <p className="text-muted">Sections coming soon.</p>
+      <main className="grid items-start gap-4 md:grid-cols-2">
+        {SECTIONS.map(({ id, component: Section, width }) => (
+          <div key={id} className={width === 'full' ? 'md:col-span-2' : ''}>
+            <Section />
+          </div>
+        ))}
       </main>
     </div>
   )
