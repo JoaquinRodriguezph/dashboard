@@ -47,8 +47,9 @@
   --color-danger: var(--danger);
 }
 
-html,
-body {
+/* The page background lives on <html> only. If <body> had one too, it would be
+   painted on top of the 3D canvas (which sits behind content with z-index -10). */
+html {
   background: var(--bg);
   color: var(--fg);
 }

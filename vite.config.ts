@@ -11,4 +11,9 @@ const base = repo ? `/${repo}/` : '/'
 export default defineConfig({
   base,
   plugins: [react(), tailwindcss()],
+  build: {
+    // three.js makes the lazy-loaded 3D chunk ~900 kB. That's expected and it
+    // never blocks the first paint, so raise the warning threshold above it.
+    chunkSizeWarningLimit: 1200,
+  },
 })

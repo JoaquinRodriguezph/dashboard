@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { animated, useSpring } from '@react-spring/web'
 import { Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Card } from '../components/Card'
 import { CheckButton } from '../components/CheckButton'
@@ -38,10 +39,15 @@ export function Goals() {
     setGoals(await deleteGoal(g.id))
   }
 
+  // The list fades and slides in slightly each time the tab changes.
+  const [panelStyle, panelApi] = useSpring(() => ({ opacity: 1, y: 0 }))
+
   const switchTab = (id: GoalList) => {
+    if (id === tab) return
     setTab(id)
     setEditingId(null)
     setAdding(false)
+    panelApi.start({ from: { opacity: 0, y: 6 }, to: { opacity: 1, y: 0 } })
   }
 
   return (
@@ -73,7 +79,7 @@ export function Goals() {
     >
       <Tabs tabs={TABS} active={tab} onChange={switchTab} label="Goal lists" />
 
-      <div role="tabpanel" className="mt-3">
+      <animated.div role="tabpanel" style={panelStyle} className="mt-3">
         {inList.length === 0 && !adding && (
           <p className="py-2 text-sm text-muted">
             {tab === 'short' ? 'No short-term goals yet.' : 'No life goals yet. Dream big.'}
@@ -142,7 +148,7 @@ export function Goals() {
             </button>
           )}
         </div>
-      </div>
+      </animated.div>
     </Card>
   )
 }

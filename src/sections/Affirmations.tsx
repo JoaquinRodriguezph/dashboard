@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { animated, useTransition } from '@react-spring/web'
 import { Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Card } from '../components/Card'
 import { IconButton } from '../components/IconButton'
@@ -25,6 +26,14 @@ export function Affirmations() {
 
   // Hashing the date gives the same pick all day, and a different one tomorrow.
   const shown = items.length > 0 ? items[(hashString(today) + offset) % items.length] : undefined
+
+  const transitions = useTransition(shown ? [shown] : [], {
+    keys: (a) => a.id,
+    from: { opacity: 0, y: 8 },
+    enter: { opacity: 1, y: 0 },
+    leave: { opacity: 0, y: -8 },
+    config: { tension: 220, friction: 24 },
+  })
 
   const handleDelete = async (a: Affirmation) => {
     if (!window.confirm('Delete this affirmation?')) return
@@ -57,9 +66,17 @@ export function Affirmations() {
     >
       {!managing ? (
         shown ? (
-          <blockquote className="py-2 text-xl leading-relaxed font-medium text-balance sm:text-2xl">
-            “{shown.text}”
-          </blockquote>
+          <div className="grid">
+            {/* Old and new quote share one grid cell, so they cross-fade in place. */}
+            {transitions((style, item) => (
+              <animated.blockquote
+                style={style}
+                className="col-start-1 row-start-1 py-2 text-xl leading-relaxed font-medium text-balance sm:text-2xl"
+              >
+                “{item.text}”
+              </animated.blockquote>
+            ))}
+          </div>
         ) : (
           <p className="py-2 text-sm text-muted">
             Add affirmations with <strong>Manage</strong>. One will be shown each day.
