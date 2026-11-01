@@ -2,12 +2,15 @@
 
 My personal dashboard: a Chrome startup page and an installable Android app (PWA).
 
-- **Dailies:** a checklist that resets at local midnight, with optional links and up/down reordering
-- **Weekly major goal:** one goal per Sunday-to-Saturday week, a Sunday prompt, a countdown, and history
+- **Dailies** (the main focus): a checklist that resets at local midnight, with a progress
+  ring, optional links, up/down reordering, and a small celebration when everything's done
+- **Weekly major goal:** one goal per Sunday-to-Saturday week, a Sunday reminder, a countdown, and history
 - **Words of affirmation:** a new one each day, plus a "show another" button
 - **Goals:** short-term and life goals in two tabs, with an option to hide completed ones
+- **Double exposure banner:** your own photos combined like analog film exposed twice
+  (pure pixel math, no AI), shown behind the greeting
 - Greeting with your name, light/dark/system theme, JSON backup export and import
-- Works offline. Data is stored in the browser (`localStorage`).
+- Works offline. Data stays on your device (`localStorage` + `IndexedDB`).
 
 Built with Vite, React, TypeScript, Tailwind CSS v4, React Three Fiber, and React Spring.
 
@@ -87,24 +90,127 @@ and uses it the next time you open it.
 
 ---
 
+## Layout
+
+```
+Laptop (≥ 1024px): three columns, up to 1600px wide
+┌──────────────── greeting + date (photo banner behind it, if you added photos) ────────────────┐
+├──────────────┬─────────────────────────────────────────────┬──────────────────────────────────┤
+│ Affirmation  │  DAILIES  (widest, featured, progress ring) │ Goals                            │
+│ Weekly goal  │                                             │                                  │
+└──────────────┴─────────────────────────────────────────────┴──────────────────────────────────┘
+
+Phone / tablet: one column → greeting → Dailies → Weekly goal → Goals → Affirmation
+```
+
+- On Sundays without a weekly goal, a small **"Set this week's goal"** chip appears under the
+  greeting. Tapping it scrolls to the weekly goal card and focuses its input. It's small on
+  purpose, so it never pushes Dailies down.
+- **How one set of cards makes both layouts** (`App.tsx` → `Sections`): every section is
+  rendered once, inside a column wrapper. On laptops the wrappers are flex columns in a
+  3-column grid. On phones the wrappers get `display: contents` (the wrapper box disappears,
+  so its cards join one single list) and CSS `order` sorts the cards by `mobileOrder`.
+- **Feedback and motion:** cards lift on hover. Buttons, rows and tabs have hover, pressed
+  (for touch) and keyboard-focus states, all defined in `components/buttonStyles.ts` and
+  `Card.tsx`. List rows animate in and out and slide when reordered (`components/AnimatedList.tsx`).
+  With the OS "reduce motion" setting on, all of this is switched off.
+
+---
+
+## Double exposure
+
+Upload a few of your own photos in **Settings → Double exposure** and the app layers them
+like a roll of film that was exposed twice. It's done entirely on your device with canvas
+pixel math: no AI, and nothing is uploaded anywhere.
+
+- **Re-roll** (the dice on the banner, or the button in settings) picks a new random seed:
+  the same photos, arranged differently.
+- **Sliders:** exposure, grain, light leak, vignette, misalignment, frame overlap.
+- **Download JPEG** saves the full 1800×1200 frame.
+- **Show banner** turns the whole feature on or off.
+
+### How the effect works (`src/lib/exposure/render.ts`)
+
+It follows what physically happens to film:
+
+1. **Frames.** Each photo is drawn *cover-fit* (filling the frame, cropping the excess) onto
+   the same 1800×1200 canvas with a small random offset, rotation and zoom (more with
+   *Misalignment*). *Frame overlap* shifts each frame sideways, like a film advance that
+   didn't wind far enough. All randomness comes from a seeded generator (`random.ts`),
+   so the same photos, settings and seed always give the exact same image.
+2. **Light adds up.** Pixels are converted from sRGB to **linear** light (sRGB 0.5 is only
+   about 21% of the light of 1.0) and the frames are **added together**, scaled by
+   `exposure / √(number of photos)`. That's why bright areas of one photo wash over the
+   other while dark areas let it show through, just like film.
+3. **Before developing**, still in linear light: a **vignette** multiplies the light down
+   towards the corners, and a warm orange **light leak** (a soft Gaussian glow from just
+   outside a random edge) is *added*.
+4. **Developing.** A film "shoulder" curve, `1 − exp(−light)`, rolls off bright highlights
+   smoothly instead of clipping them. Then the result is converted back to sRGB.
+5. **Chromatic fringing.** Red is sampled 2px to the right and blue 2px to the left, giving
+   the subtle colour edges of a cheap lens.
+6. **Grain.** One random value per pixel (the same for R, G and B, so the grain is
+   monochrome), scaled by `v × (1 − v)`. That's zero in pure black and white and strongest
+   in the midtones, like real film grain.
+
+**Performance:**
+- The pixel work runs in a **Web Worker** (`exposure.worker.ts`), a separate thread, so the
+  page never freezes. In Chrome the worker also draws the photos and encodes the JPEG on an
+  `OffscreenCanvas`. Other browsers fall back to drawing on the page.
+- One image takes about 0.6 s.
+- The result is **cached**. On startup the app just shows the cached JPEG; it only
+  regenerates after a re-roll, a photo change or a slider change (debounced while you drag).
+  The worker isn't even downloaded until it's needed.
+
+---
+
 ## Where my data lives
 
-Everything is saved in the browser's `localStorage`, which means:
+| What | Where | Why |
+|---|---|---|
+| Settings, dailies, goals, affirmations, weekly goals | `localStorage` (keys `dash.v1.*`) | Small text data |
+| Your photos (downscaled to ≤1600px JPEG, ~100–300 KB each) and the cached double exposure | `IndexedDB` (database `dashboard`) | Binary images are too big for localStorage (~5 MB limit) |
 
-- Data is **per browser, per device**. Your laptop and phone each have their own copy,
-  and `localhost` (dev) is separate from the deployed site.
+Both are **per browser, per device**:
+
+- Your laptop and phone each have their own copy, and `localhost` (dev) is separate from
+  the deployed site.
 - Clearing site data in the browser deletes it. **Use Settings → Export data now and then**
   to download a backup. Use **Import data** to restore it or move it to another device.
-- Import is safe: the file is fully validated *before* anything is written. A wrong or
-  broken file shows an error and changes nothing, and a valid one asks for confirmation first.
+
+**The PWA and your photos:** the service worker only caches the app's own files (HTML, JS,
+CSS, icons, including the worker script so generating works offline). Photos never go
+through it: they're read from IndexedDB and shown via `blob:` URLs.
+
+### Backups and photos
+
+- **"Include photos"** (on by default) puts your photos into the backup file as base64
+  text. That makes the backup complete, so one file moves everything to a new phone.
+  The downside is size: photos grow by about a third as text, so 10 photos make roughly a
+  3–5 MB file. Untick it for a small backup with just your lists.
+- **Import is safe:** the whole file is validated *before* anything is written, including
+  decoding every photo. A wrong or broken file shows an error and changes nothing.
+  A valid one asks for confirmation first and says what happens to your photos:
+  - backup **with** photos → they replace your current photos
+  - backup **without** photos (or an old backup from before this feature) → your current
+    photos are kept
+- The generated image isn't included in backups; it's re-created from the seed.
+
+### Data migrations
+
+When the shape of saved data changes, `initStorage()` in `src/storage.ts` upgrades old data
+automatically, once, before the app shows anything. It reads `dash.schemaVersion` and runs
+each numbered step in `MIGRATIONS` that hasn't run yet. (Example: step 2 added the
+`doubleExposure` settings with their defaults.)
 
 ### Switching to Supabase later
 
 All reading and writing goes through **one file: `src/storage.ts`**. Every function there
 is `async` and returns plain data (`getDailies()`, `addGoal(list, text)`,
-`setDailyChecked(today, id, checked)`, …). To move to Supabase, rewrite the insides of
-those functions to call Supabase instead of `localStorage`, keeping the same names and
-return types. No component needs to change.
+`setDailyChecked(today, id, checked)`, `getPhotos()`, `addPhoto(…)`, …). To move to Supabase,
+rewrite the insides of those functions, using tables for the lists and **Supabase Storage**
+for the photos, and keep the same names and return types. No component needs to change.
+(`lib/idb.ts` is a helper used only by storage.ts.)
 
 (One exception: `dash.themeCache` stays in localStorage on purpose. It lets the tiny script
 in `index.html` apply dark mode *before* the app loads, so the page never flashes white.)
@@ -116,21 +222,31 @@ in `index.html` apply dark mode *before* the app loads, so the page never flashe
 ```
 src/
 ├─ main.tsx               Entry point: mounts React, sets reduced-motion for animations
-├─ App.tsx                Page layout: header, sections grid, lazy 3D background
+├─ App.tsx                Page layout: header, 3-column sections grid, lazy 3D + settings
 ├─ index.css              Tailwind + light/dark color tokens (start a redesign here)
-├─ storage.ts             ★ The only file that reads or writes data
-├─ types.ts               Data shapes (Daily, WeeklyGoal, Goal, …)
+├─ storage.ts             ★ The only file that reads or writes data (+ migrations)
+├─ types.ts               Data shapes (Daily, WeeklyGoal, Goal, Photo, …)
 ├─ lib/
 │  ├─ dates.ts            Local-time date helpers (weeks start Sunday)
 │  ├─ useToday.ts         Today's date; re-renders at midnight and when the tab wakes
 │  ├─ settings.tsx        Settings shared via React context (useSettings)
 │  ├─ useTheme.ts         Applies light/dark, follows the system in "system" mode
 │  ├─ useReducedMotion.ts Reads the OS "reduce motion" setting
-│  ├─ backup.ts           Export download + import validation
-│  └─ url.ts              Cleans up links (adds https://, blocks non-web links)
-├─ components/            Reusable UI: Card, TextForm, CheckButton, IconButton, Tabs
+│  ├─ backup.ts           Export download + import validation (format v2, optional photos)
+│  ├─ idb.ts              Tiny IndexedDB helper, used only by storage.ts
+│  ├─ resizeImage.ts      Downscales uploads to ≤1600px JPEG
+│  ├─ url.ts              Cleans up links (adds https://, blocks non-web links)
+│  └─ exposure/           ★ Double exposure
+│     ├─ render.ts        The film algorithm (pure functions)
+│     ├─ exposure.worker.ts  Runs render.ts off the main thread
+│     ├─ client.ts        renderDoubleExposure(): talks to the worker
+│     ├─ ExposureContext.tsx Photos + cached image + when to regenerate
+│     └─ random.ts        Seeded random numbers (reproducible results)
+├─ components/            Reusable UI: Card, TextForm, CheckButton, IconButton, Tabs,
+│                         ProgressRing, AnimatedList, StrikeText, Celebration, buttonStyles
 ├─ sections/              One file per dashboard section, plus index.ts (the registry)
-├─ settings/              The settings dialog
+│                         and the header pieces (Header, ExposureBanner, SundayGoalChip)
+├─ settings/              The settings dialog (lazy-loaded) + DoubleExposureSettings
 └─ three/Background3D.tsx ★ The only 3D code (lazy-loaded)
 ```
 
@@ -173,9 +289,13 @@ src/
 
    export const SECTIONS: SectionConfig[] = [
      // ...existing sections
-     { id: 'my-section', component: MySection, width: 'half' }, // or 'full'
+     { id: 'my-section', component: MySection, column: 'right', mobileOrder: 5 },
    ]
    ```
+
+   - `column`: `'left'`, `'center'` or `'right'` on laptops. Sections in the same column
+     stack in the order they're listed.
+   - `mobileOrder`: position in the single phone column (lower = higher up).
 
 3. **If it stores data:**
    - Add its type to `src/types.ts` and a field for it to `AllData`.
@@ -183,6 +303,10 @@ src/
      and include it in `exportAll()` and `importAll()`.
    - Add validation for it in `validateData()` in `src/lib/backup.ts`. (Make it optional
      there so older backup files still import.)
+   - If you change the shape of data that's already saved, add a step to `MIGRATIONS` in
+     `src/storage.ts` and bump `CURRENT_SCHEMA`.
+
+4. For lists, use `<AnimatedList>` to get the add/remove/reorder animations for free.
 
 ---
 
@@ -190,6 +314,11 @@ src/
 
 - **Colors:** edit the CSS variables in `src/index.css` (`:root` for light, `.dark` for dark).
   Components use names like `bg-surface` and `text-muted`, never raw colors.
+- **Buttons and cards:** hover, pressed and focus styles live in `components/buttonStyles.ts`
+  and `components/Card.tsx`.
+- **Film look:** tune the defaults in `DEFAULT_DOUBLE_EXPOSURE` (`src/storage.ts`) or the
+  maths in `src/lib/exposure/render.ts`. Bump `ALGORITHM_VERSION` there so cached images
+  regenerate.
 - **3D:** replace `src/three/Background3D.tsx`. It just needs a default export that accepts
   `{ dark, reducedMotion }`.
 - **App icon:** replace `public/favicon.svg` and run `npm run generate-icons`.
