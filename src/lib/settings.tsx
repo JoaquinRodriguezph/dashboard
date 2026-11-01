@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Settings } from '../types'
-import { DEFAULT_SETTINGS, getSettings, saveSettings } from '../storage'
+import { DEFAULT_SETTINGS, getSettings, initStorage, saveSettings } from '../storage'
 
 // Settings are needed in several places (header, goals, settings panel), so
 // they're shared through React context instead of being passed down as props.
@@ -18,10 +18,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    getSettings().then((s) => {
-      setSettings(s)
-      setLoaded(true)
-    })
+    // Upgrade any old saved data first. App shows nothing until `loaded`,
+    // so every section reads already-migrated data.
+    initStorage()
+      .then(getSettings)
+      .then((s) => {
+        setSettings(s)
+        setLoaded(true)
+      })
   }, [])
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {

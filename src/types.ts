@@ -9,6 +9,40 @@ export interface Settings {
   name: string
   theme: ThemePreference
   hideCompletedGoals: boolean
+  doubleExposure: DoubleExposureSettings
+}
+
+/**
+ * Settings for the film double-exposure banner. Every slider is 0–1 except
+ * `exposure`, which is a light multiplier (see lib/exposure/render.ts).
+ */
+export interface DoubleExposureSettings {
+  enabled: boolean
+  /** Same photos + same settings + same seed = the same image. Re-roll picks a new seed. */
+  seed: number
+  exposure: number
+  grain: number
+  lightLeak: number
+  vignette: number
+  misalignment: number
+  frameOverlap: number
+}
+
+/** An uploaded photo, already downscaled. Stored in IndexedDB (not localStorage). */
+export interface Photo {
+  id: string
+  blob: Blob // JPEG
+  width: number
+  height: number
+  createdAt: string
+}
+
+/** The last generated double exposure, cached so startup doesn't regenerate it. */
+export interface ExposureResult {
+  /** Fingerprint of everything that went into it (photo ids + settings + seed). */
+  recipeKey: string
+  blob: Blob // JPEG
+  createdAt: string
 }
 
 /** A task that repeats every day. List order = display order. */

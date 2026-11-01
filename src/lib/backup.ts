@@ -1,26 +1,58 @@
-import { DEFAULT_SETTINGS, exportAll } from '../storage'
+import { DEFAULT_DOUBLE_EXPOSURE, DEFAULT_SETTINGS, exportAll, getPhotos } from '../storage'
 import { toDateKey } from './dates'
-import type { AllData, Settings } from '../types'
+import type { AllData, DoubleExposureSettings, Photo, Settings } from '../types'
 
 // A backup file looks like:
-//   { "app": "personal-dashboard", "version": 1, "exportedAt": "...", "data": { ...AllData } }
+//   { "app": "personal-dashboard", "version": 2, "exportedAt": "...",
+//     "data": { ...AllData }, "photos": [ ...optional ] }
 // The "app" and "version" fields let us recognise our own files and reject anything else.
+//
+// Version history:
+//   1: original format (no photos, no doubleExposure settings)
+//   2: adds settings.doubleExposure and an optional "photos" list
+// Older versions are still accepted; missing fields get their defaults.
 
 const APP_ID = 'personal-dashboard'
-const VERSION = 1
-const MAX_FILE_BYTES = 5 * 1024 * 1024
+const VERSION = 2
+const MAX_FILE_BYTES = 100 * 1024 * 1024 // photos make backups big
+
+/** How a photo is written in the JSON file: the JPEG as a base64 "data URL". */
+interface SerializedPhoto {
+  id: string
+  dataUrl: string
+  width: number
+  height: number
+  createdAt: string
+}
 
 export interface BackupFile {
   app: typeof APP_ID
   version: number
   exportedAt: string
   data: AllData
+  /** Present only if the backup was exported with photos. */
+  photos?: Photo[]
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
 }
 
 /** Builds a backup and makes the browser download it as a .json file. */
-export async function downloadBackup(): Promise<void> {
-  const backup: BackupFile = { app: APP_ID, version: VERSION, exportedAt: new Date().toISOString(), data: await exportAll() }
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+export async function downloadBackup({ includePhotos }: { includePhotos: boolean }): Promise<void> {
+  const photos: SerializedPhoto[] | undefined = includePhotos
+    ? await Promise.all(
+        (await getPhotos()).map(async ({ blob, ...rest }) => ({ ...rest, dataUrl: await blobToDataUrl(blob) })),
+      )
+    : undefined
+
+  const file = { app: APP_ID, version: VERSION, exportedAt: new Date().toISOString(), data: await exportAll(), photos }
+  const blob = new Blob([JSON.stringify(file)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -52,6 +84,10 @@ function bool(o: Obj, key: string, where: string): boolean {
   return typeof o[key] === 'boolean' ? (o[key] as boolean) : fail(`${where}: "${key}" should be true/false`)
 }
 
+function num(o: Obj, key: string, where: string): number {
+  return typeof o[key] === 'number' && Number.isFinite(o[key]) ? (o[key] as number) : fail(`${where}: "${key}" should be a number`)
+}
+
 function list<T>(o: Obj, key: string, item: (v: Obj, where: string) => T): T[] {
   const arr = o[key]
   if (!Array.isArray(arr)) fail(`"${key}" should be a list`)
@@ -59,6 +95,25 @@ function list<T>(o: Obj, key: string, item: (v: Obj, where: string) => T): T[] {
     const where = `${key} #${i + 1}`
     return isObj(v) ? item(v, where) : fail(`${where} is not an object`)
   })
+}
+
+/** Uses each saved value if it's a sensible number, otherwise the default. Clamps to the slider ranges. */
+function validateDoubleExposure(raw: unknown): DoubleExposureSettings {
+  const d = isObj(raw) ? raw : {}
+  const pick = (key: keyof DoubleExposureSettings, min: number, max: number) => {
+    const v = d[key]
+    return typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : (DEFAULT_DOUBLE_EXPOSURE[key] as number)
+  }
+  return {
+    enabled: typeof d.enabled === 'boolean' ? d.enabled : DEFAULT_DOUBLE_EXPOSURE.enabled,
+    seed: Math.round(pick('seed', 0, 2 ** 31)),
+    exposure: pick('exposure', 0.3, 3),
+    grain: pick('grain', 0, 1),
+    lightLeak: pick('lightLeak', 0, 1),
+    vignette: pick('vignette', 0, 1),
+    misalignment: pick('misalignment', 0, 1),
+    frameOverlap: pick('frameOverlap', 0, 1),
+  }
 }
 
 function validateData(d: Obj): AllData {
@@ -69,6 +124,7 @@ function validateData(d: Obj): AllData {
     name: typeof s.name === 'string' ? s.name : DEFAULT_SETTINGS.name,
     theme,
     hideCompletedGoals: typeof s.hideCompletedGoals === 'boolean' ? s.hideCompletedGoals : DEFAULT_SETTINGS.hideCompletedGoals,
+    doubleExposure: validateDoubleExposure(s.doubleExposure), // absent in v1 backups → defaults
   }
 
   const c = isObj(d.dailyChecks) ? d.dailyChecks : { date: '', doneIds: [] }
@@ -99,6 +155,26 @@ function validateData(d: Obj): AllData {
   }
 }
 
+/** Turns each saved photo back into a Blob and checks the browser can actually decode it. */
+async function validatePhotos(file: Obj): Promise<Photo[]> {
+  const raw = list(file, 'photos', (v, w) => {
+    const dataUrl = str(v, 'dataUrl', w)
+    if (!dataUrl.startsWith('data:image/')) fail(`${w}: not an image`)
+    return { id: str(v, 'id', w), dataUrl, width: num(v, 'width', w), height: num(v, 'height', w), createdAt: str(v, 'createdAt', w) }
+  })
+  return Promise.all(
+    raw.map(async ({ dataUrl, ...rest }, i) => {
+      const blob = await (await fetch(dataUrl)).blob()
+      try {
+        ;(await createImageBitmap(blob)).close()
+      } catch {
+        fail(`photos #${i + 1} can't be opened as an image`)
+      }
+      return { ...rest, blob }
+    }),
+  )
+}
+
 export type ParseResult = { ok: true; backup: BackupFile } | { ok: false; error: string }
 
 /** Reads an uploaded file and checks it's a valid backup. Never writes anything. */
@@ -116,8 +192,9 @@ export async function parseBackupFile(file: File): Promise<ParseResult> {
       fail('This backup was made by a newer version of the dashboard.')
     }
     const data = isObj(json.data) ? validateData(json.data) : fail('The backup has no data.')
+    const photos = json.photos === undefined ? undefined : await validatePhotos(json)
     const exportedAt = typeof json.exportedAt === 'string' ? json.exportedAt : ''
-    return { ok: true, backup: { app: APP_ID, version: json.version, exportedAt, data } }
+    return { ok: true, backup: { app: APP_ID, version: json.version, exportedAt, data, photos } }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Invalid backup file.' }
   }

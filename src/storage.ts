@@ -7,16 +7,25 @@
 //
 // Functions that change a list return the updated list, so the UI can do:
 //   setDailies(await deleteDaily(id))
+//
+// Where things live today:
+//   localStorage → all text data (settings, dailies, goals, ...), keys "dash.v1.*"
+//   IndexedDB    → photos and the cached double-exposure image (binary, too big
+//                  for localStorage), via the helpers in lib/idb.ts
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { idbDelete, idbGet, idbGetAll, idbPut, idbReplaceAll } from './lib/idb'
 import type {
   AllData,
   Affirmation,
   Daily,
   DailyChecks,
   DateKey,
+  DoubleExposureSettings,
+  ExposureResult,
   Goal,
   GoalList,
+  Photo,
   Settings,
   WeeklyGoal,
 } from './types'
@@ -52,7 +61,7 @@ function write(key: DataKey, value: unknown): void {
 // header's Sunday reminder disappears once the weekly goal card saves a goal).
 // With Supabase, realtime subscriptions could call notify() the same way.
 
-export type DataKey = (typeof KEYS)[keyof typeof KEYS]
+export type DataKey = (typeof KEYS)[keyof typeof KEYS] | 'photos'
 type Listener = (key: DataKey) => void
 const listeners = new Set<Listener>()
 
@@ -74,16 +83,76 @@ function newId(): string {
 
 const nowIso = () => new Date().toISOString()
 
+// ── Migrations ───────────────────────────────────────────────────────────────
+// When the shape of saved data changes, add a numbered step here that upgrades
+// old data. initStorage() runs any steps the browser hasn't run yet, in order,
+// once at startup (App waits for it before showing any section).
+
+const SCHEMA_KEY = 'dash.schemaVersion'
+const CURRENT_SCHEMA = 2
+
+const MIGRATIONS: Record<number, () => void> = {
+  // v1 → v2: settings gained `doubleExposure`. Fill in its defaults.
+  2: () => {
+    const stored = read<Partial<Settings> | null>(KEYS.settings, null)
+    if (stored) write(KEYS.settings, mergeSettings(stored))
+  },
+}
+
+function storedSchemaVersion(): number {
+  const raw = localStorage.getItem(SCHEMA_KEY)
+  if (raw !== null) return Number(raw)
+  // No version saved: either a brand-new install, or data from before
+  // versioning existed (= version 1).
+  const hasOldData = Object.values(KEYS).some((k) => localStorage.getItem(PREFIX + k) !== null)
+  return hasOldData ? 1 : CURRENT_SCHEMA
+}
+
+let ready: Promise<void> | null = null
+
+/** Upgrades old saved data if needed. Safe to call many times; runs once. */
+export function initStorage(): Promise<void> {
+  ready ??= (async () => {
+    for (let v = storedSchemaVersion() + 1; v <= CURRENT_SCHEMA; v++) {
+      MIGRATIONS[v]?.()
+      localStorage.setItem(SCHEMA_KEY, String(v))
+    }
+    localStorage.setItem(SCHEMA_KEY, String(CURRENT_SCHEMA))
+  })()
+  return ready
+}
+
 // ── Settings ─────────────────────────────────────────────────────────────────
+
+export const DEFAULT_DOUBLE_EXPOSURE: DoubleExposureSettings = {
+  enabled: true,
+  seed: 1,
+  exposure: 1.4,
+  grain: 0.35,
+  lightLeak: 0.4,
+  vignette: 0.5,
+  misalignment: 0.3,
+  frameOverlap: 0.25,
+}
 
 export const DEFAULT_SETTINGS: Settings = {
   name: '',
   theme: 'system',
   hideCompletedGoals: false,
+  doubleExposure: DEFAULT_DOUBLE_EXPOSURE,
+}
+
+/** Fills in any missing fields with defaults, including nested ones. */
+function mergeSettings(stored: Partial<Settings>): Settings {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    doubleExposure: { ...DEFAULT_DOUBLE_EXPOSURE, ...stored.doubleExposure },
+  }
 }
 
 export async function getSettings(): Promise<Settings> {
-  return { ...DEFAULT_SETTINGS, ...read<Partial<Settings>>(KEYS.settings, {}) }
+  return mergeSettings(read<Partial<Settings>>(KEYS.settings, {}))
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {
@@ -233,6 +302,41 @@ export async function deleteGoal(id: string): Promise<Goal[]> {
   return goals
 }
 
+// ── Photos (IndexedDB) ───────────────────────────────────────────────────────
+// With Supabase, photos would go to Supabase Storage (files) plus a table row
+// with width/height/createdAt. Callers only ever see Photo objects with a Blob.
+
+/** All photos, oldest first. */
+export async function getPhotos(): Promise<Photo[]> {
+  const photos = await idbGetAll<Photo>('photos')
+  return photos.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+
+/** Saves an (already downscaled) photo. */
+export async function addPhoto(input: { blob: Blob; width: number; height: number }): Promise<Photo[]> {
+  await idbPut('photos', { ...input, id: newId(), createdAt: nowIso() } satisfies Photo)
+  notify('photos')
+  return getPhotos()
+}
+
+export async function deletePhoto(id: string): Promise<Photo[]> {
+  await idbDelete('photos', id)
+  notify('photos')
+  return getPhotos()
+}
+
+// The cache store holds a single record with this id: the latest generated image.
+const RESULT_ID = 'exposure-result'
+
+export async function getExposureResult(): Promise<ExposureResult | null> {
+  const record = await idbGet<ExposureResult & { id: string }>('cache', RESULT_ID)
+  return record ?? null
+}
+
+export async function saveExposureResult(recipeKey: string, blob: Blob): Promise<void> {
+  await idbPut('cache', { id: RESULT_ID, recipeKey, blob, createdAt: nowIso() })
+}
+
 // ── Backup ───────────────────────────────────────────────────────────────────
 
 export async function exportAll(): Promise<AllData> {
@@ -246,8 +350,18 @@ export async function exportAll(): Promise<AllData> {
   }
 }
 
-/** Replace ALL data. Only call this with data that has already been validated. */
-export async function importAll(data: AllData): Promise<void> {
+/**
+ * Replace ALL data. Only call this with data that has already been validated.
+ * `photos`: pass an array to replace all photos, or undefined to keep the current ones
+ * (older backups and backups exported without photos).
+ */
+export async function importAll(data: AllData, photos?: Photo[]): Promise<void> {
+  // Photos first: it's the step most likely to fail (disk space). If it throws,
+  // nothing else has been touched yet.
+  if (photos) {
+    await idbReplaceAll('photos', photos)
+    notify('photos')
+  }
   await saveSettings(data.settings)
   write(KEYS.dailies, data.dailies)
   write(KEYS.dailyChecks, data.dailyChecks)
