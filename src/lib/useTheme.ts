@@ -16,6 +16,8 @@ export function useTheme(preference: ThemePreference): boolean {
     const apply = () => {
       const dark = preference === 'dark' || (preference === 'system' && media.matches)
       document.documentElement.classList.toggle('dark', dark)
+      // Match the phone's status bar (and Chrome's tab strip on Android) to the page.
+      document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0c1017' : '#f3f6f9')
       setIsDark(dark)
     }
     apply()
