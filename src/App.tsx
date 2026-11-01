@@ -12,7 +12,7 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
-      <Header now={new Date()} onOpenSettings={() => {}} />
+      <Header onOpenSettings={() => {}} />
       <main className="grid gap-4 md:grid-cols-2">
         <p className="text-muted">Sections coming soon.</p>
       </main>

@@ -1,4 +1,5 @@
 import { Monitor, Moon, Settings as SettingsIcon, Sun } from 'lucide-react'
+import { useNow } from '../lib/useNow'
 import { useSettings } from '../lib/settings'
 import type { ThemePreference } from '../types'
 
@@ -18,11 +19,11 @@ function greetingFor(hour: number): string {
 }
 
 interface HeaderProps {
-  now: Date
   onOpenSettings: () => void
 }
 
-export function Header({ now, onOpenSettings }: HeaderProps) {
+export function Header({ onOpenSettings }: HeaderProps) {
+  const now = useNow() // ticks every minute so the greeting and date stay current
   const { settings, updateSettings } = useSettings()
   const ThemeIcon = THEME_ICON[settings.theme]
   const name = settings.name.trim()
