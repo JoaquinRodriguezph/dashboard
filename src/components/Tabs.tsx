@@ -34,8 +34,8 @@ export function Tabs<T extends string>({ tabs, active, onChange, label }: TabsPr
             role="tab"
             aria-selected={selected}
             onClick={() => onChange(tab.id)}
-            className={`relative flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              selected ? 'text-fg' : 'text-muted hover:text-fg'
+            className={`relative flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 ${
+              selected ? 'text-fg' : 'text-muted hover:bg-surface/50 hover:text-fg'
             }`}
           >
             {tab.label}

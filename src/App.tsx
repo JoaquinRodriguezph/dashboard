@@ -85,7 +85,8 @@ function Sections() {
   const trail = useTrail(BY_PRIORITY.length, {
     from: { opacity: 0, y: 14 },
     to: { opacity: 1, y: 0 },
-    config: { tension: 280, friction: 26 },
+    config: { tension: 340, friction: 30 }, // each card ≈ 350 ms, staggered
+
   })
 
   return (

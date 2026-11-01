@@ -19,11 +19,11 @@ export function CheckButton({ checked, onChange, label }: CheckButtonProps) {
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className="group inline-flex size-9 shrink-0 items-center justify-center rounded-full"
+      className="group inline-flex size-9 shrink-0 items-center justify-center rounded-full transition-transform duration-150 active:scale-85 motion-reduce:transition-none motion-reduce:active:scale-100"
     >
       <span
         className={`relative flex size-5.5 items-center justify-center rounded-full border-2 transition-colors ${
-          checked ? 'border-accent' : 'border-line group-hover:border-accent'
+          checked ? 'border-accent' : 'border-muted/50 group-hover:border-accent group-hover:bg-accent-soft'
         }`}
       >
         <animated.span

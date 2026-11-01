@@ -5,6 +5,7 @@ import { downloadBackup, parseBackupFile } from '../lib/backup'
 import { useSettings } from '../lib/settings'
 import { importAll } from '../storage'
 import type { ThemePreference } from '../types'
+import { buttonClass } from '../components/buttonStyles'
 
 interface SettingsPanelProps {
   open: boolean
@@ -120,14 +121,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               <button
                 type="button"
                 onClick={() => downloadBackup()}
-                className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm hover:bg-surface-hover"
+                className={buttonClass('outline', 'md')}
               >
                 <Download size={16} /> Export data
               </button>
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm hover:bg-surface-hover"
+                className={buttonClass('outline', 'md')}
               >
                 <Upload size={16} /> Import data
               </button>

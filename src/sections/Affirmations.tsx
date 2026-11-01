@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { animated, useTransition } from '@react-spring/web'
 import { Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { AnimatedList } from '../components/AnimatedList'
 import { Card } from '../components/Card'
 import { IconButton } from '../components/IconButton'
 import { TextForm } from '../components/TextForm'
@@ -8,6 +9,7 @@ import { hashString } from '../lib/dates'
 import { useToday } from '../lib/useToday'
 import { addAffirmation, deleteAffirmation, getAffirmations, updateAffirmation } from '../storage'
 import type { Affirmation } from '../types'
+import { buttonClass } from '../components/buttonStyles'
 
 export function Affirmations() {
   const today = useToday()
@@ -16,9 +18,13 @@ export function Affirmations() {
   const [managing, setManaging] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    getAffirmations().then(setItems)
+    getAffirmations().then((list) => {
+      setItems(list)
+      setLoaded(true)
+    })
   }, [])
 
   // A new day starts from that day's affirmation again.
@@ -29,16 +35,19 @@ export function Affirmations() {
 
   const transitions = useTransition(shown ? [shown] : [], {
     keys: (a) => a.id,
+    initial: null, // today's affirmation is simply there on load; only changes animate
     from: { opacity: 0, y: 8 },
     enter: { opacity: 1, y: 0 },
     leave: { opacity: 0, y: -8 },
-    config: { tension: 220, friction: 24 },
+    config: { tension: 320, friction: 30 }, // ≈ 300 ms
   })
 
   const handleDelete = async (a: Affirmation) => {
     if (!window.confirm('Delete this affirmation?')) return
     setItems(await deleteAffirmation(a.id))
   }
+
+  if (!loaded) return null
 
   return (
     <Card
@@ -57,7 +66,7 @@ export function Affirmations() {
               setEditingId(null)
               setAdding(false)
             }}
-            className="rounded-lg px-2.5 py-1 text-sm text-muted hover:bg-surface-hover hover:text-fg"
+            className={buttonClass('ghost')}
           >
             {managing ? 'Done' : 'Manage'}
           </button>
@@ -84,10 +93,10 @@ export function Affirmations() {
         )
       ) : (
         <div>
-          <ul className="-mx-1">
-            {items.map((a) =>
+          <AnimatedList items={items} getKey={(a) => a.id} className="-mx-1">
+            {(a) =>
               editingId === a.id ? (
-                <li key={a.id} className="px-1 py-1">
+                <div className="px-1 py-1">
                   <TextForm
                     fields={[{ name: 'text', placeholder: 'Affirmation', initial: a.text, required: true }]}
                     submitLabel="Save"
@@ -97,9 +106,9 @@ export function Affirmations() {
                     }}
                     onCancel={() => setEditingId(null)}
                   />
-                </li>
+                </div>
               ) : (
-                <li key={a.id} className="flex items-center gap-1 rounded-lg px-1 hover:bg-surface-hover/60">
+                <div className="flex items-center gap-1 rounded-xl px-1 transition-colors hover:bg-surface-hover/70 active:bg-surface-hover">
                   <span className="min-w-0 flex-1 py-2 pl-2 break-words">{a.text}</span>
                   <IconButton label="Edit" onClick={() => setEditingId(a.id)}>
                     <Pencil size={16} />
@@ -107,10 +116,10 @@ export function Affirmations() {
                   <IconButton label="Delete" tone="danger" onClick={() => handleDelete(a)}>
                     <Trash2 size={16} />
                   </IconButton>
-                </li>
-              ),
-            )}
-          </ul>
+                </div>
+              )
+            }
+          </AnimatedList>
           <div className="mt-2">
             {adding ? (
               <TextForm
@@ -124,7 +133,7 @@ export function Affirmations() {
               <button
                 type="button"
                 onClick={() => setAdding(true)}
-                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-muted hover:bg-surface-hover hover:text-fg"
+                className={buttonClass('ghost', 'md')}
               >
                 <Plus size={16} /> Add affirmation
               </button>

@@ -50,7 +50,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
         <button
           type="button"
           onClick={() => updateSettings({ theme: NEXT_THEME[settings.theme] })}
-          className="rounded-full p-2.5 text-muted hover:bg-surface-hover hover:text-fg"
+          className="rounded-full p-2.5 text-muted transition duration-150 hover:bg-surface-hover hover:text-fg active:scale-90 motion-reduce:transition-none"
           aria-label={`Theme: ${settings.theme}. Click to change.`}
           title={`Theme: ${settings.theme}`}
         >
@@ -59,7 +59,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
         <button
           type="button"
           onClick={onOpenSettings}
-          className="rounded-full p-2.5 text-muted hover:bg-surface-hover hover:text-fg"
+          className="rounded-full p-2.5 text-muted transition duration-150 hover:bg-surface-hover hover:text-fg active:scale-90 motion-reduce:transition-none"
           aria-label="Open settings"
           title="Settings"
         >

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { buttonClass } from './buttonStyles'
 
 export interface TextField {
   name: string
@@ -74,14 +75,14 @@ export function TextForm({ fields, submitLabel, onSubmit, onCancel, clearOnSubmi
       ))}
       <div className="flex justify-end gap-2">
         {onCancel && (
-          <button type="button" onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-surface-hover hover:text-fg">
+          <button type="button" onClick={onCancel} className={buttonClass('ghost', 'md')}>
             Cancel
           </button>
         )}
         <button
           type="submit"
           disabled={!canSubmit}
-          className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg disabled:opacity-40"
+          className={buttonClass('primary', 'md')}
         >
           {submitLabel}
         </button>

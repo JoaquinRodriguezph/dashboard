@@ -17,11 +17,17 @@ interface CardProps {
   children: ReactNode
 }
 
+// Hover (mouse only, see buttonStyles.ts): lift 2px, deeper shadow, accent border.
+// focus-within: the same accent border while you're typing or tabbing inside it.
+const INTERACTIVE =
+  'transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-xl focus-within:border-accent/60 ' +
+  'motion-reduce:transition-none motion-reduce:hover:translate-y-0'
+
 const VARIANT_CLASS = {
-  default: 'border-line bg-surface p-4 shadow-sm sm:p-5',
+  default: 'border-line bg-surface p-4 shadow-sm hover:border-accent/35 sm:p-5',
   // bg-surface sets the color; the gradient (a background *image*) adds an accent wash on top.
   featured:
-    'border-accent/40 bg-surface bg-linear-to-b from-accent-soft to-transparent to-40% p-5 shadow-lg shadow-accent/10 ring-1 ring-accent/10 sm:p-7',
+    'border-accent/40 bg-surface bg-linear-to-b from-accent-soft to-transparent to-40% p-5 shadow-lg shadow-accent/10 ring-1 ring-accent/10 hover:border-accent/70 hover:shadow-accent/20 sm:p-7',
 }
 
 /** The box every section lives in. */
@@ -31,7 +37,7 @@ export function Card({ title, meta, leading, actions, variant = 'default', id, c
     <section
       id={id}
       aria-label={title}
-      className={`scroll-mt-6 rounded-2xl border backdrop-blur-md ${VARIANT_CLASS[variant]} ${className}`}
+      className={`scroll-mt-6 rounded-2xl border backdrop-blur-md ${INTERACTIVE} ${VARIANT_CLASS[variant]} ${className}`}
     >
       <div className={`flex min-h-9 items-center justify-between gap-3 ${featured ? 'mb-5' : 'mb-3'}`}>
         <div className="flex min-w-0 items-center gap-4">
