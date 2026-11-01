@@ -4,6 +4,7 @@ import { IconButton } from '../components/IconButton'
 import { downloadBackup, parseBackupFile } from '../lib/backup'
 import { useSettings } from '../lib/settings'
 import { importAll } from '../storage'
+import { DoubleExposureSettings } from './DoubleExposureSettings'
 import type { ThemePreference } from '../types'
 import { buttonClass } from '../components/buttonStyles'
 
@@ -77,7 +78,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       ref={dialogRef}
       onClose={onClose}
       onClick={(e) => e.target === dialogRef.current && onClose()} // click on the backdrop
-      className="m-auto w-[min(28rem,calc(100%-2rem))] rounded-2xl border border-line bg-bg p-0 text-fg shadow-xl backdrop:bg-black/40 backdrop:backdrop-blur-sm"
+      className="m-auto w-[min(32rem,calc(100%-2rem))] rounded-2xl border border-line bg-bg p-0 text-fg shadow-xl backdrop:bg-black/40 backdrop:backdrop-blur-sm"
     >
       <div className="p-5">
         <div className="mb-4 flex items-center justify-between">
@@ -122,6 +123,8 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               ))}
             </div>
           </fieldset>
+
+          <DoubleExposureSettings />
 
           <div>
             <h3 className="mb-1.5 text-sm font-medium">Backup</h3>

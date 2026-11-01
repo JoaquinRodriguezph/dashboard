@@ -1,16 +1,19 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react'
 import { animated, Globals, useTrail } from '@react-spring/web'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { ExposureProvider } from './lib/exposure/ExposureContext'
 import { useReducedMotion } from './lib/useReducedMotion'
 import { useSettings } from './lib/settings'
 import { useTheme } from './lib/useTheme'
 import { Header } from './sections/Header'
 import { COLUMNS, SECTIONS } from './sections'
-import { SettingsPanel } from './settings/SettingsPanel'
 
 // lazy() puts the 3D scene (and all of three.js) in a separate file that is
 // only downloaded when <Background3D> is first rendered.
 const Background3D = lazy(() => import('./three/Background3D'))
+// The settings dialog (photo upload, sliders, backup) is only needed once you
+// open it, so it's downloaded on first open instead of at startup.
+const SettingsPanel = lazy(() => import('./settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })))
 
 /** Becomes true once the browser is idle after the first paint. */
 function useIdle(): boolean {
@@ -29,6 +32,7 @@ function useIdle(): boolean {
 export default function App() {
   const { settings, loaded } = useSettings()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsLoaded, setSettingsLoaded] = useState(false) // true after the first open
   const isDark = useTheme(settings.theme)
   const reducedMotion = useReducedMotion()
   const idle = useIdle()
@@ -43,7 +47,8 @@ export default function App() {
   if (!loaded) return null
 
   return (
-    <>
+    // Inside `loaded`, so the double exposure never starts from default settings.
+    <ExposureProvider>
       {idle && (
         <ErrorBoundary>
           <Suspense fallback={null}>
@@ -53,12 +58,21 @@ export default function App() {
       )}
 
       <div className="mx-auto max-w-2xl px-4 pb-16 sm:px-6 lg:max-w-[1600px] lg:px-8">
-        <Header onOpenSettings={() => setSettingsOpen(true)} />
+        <Header
+          onOpenSettings={() => {
+            setSettingsLoaded(true)
+            setSettingsOpen(true)
+          }}
+        />
         <Sections />
       </div>
 
-      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    </>
+      {settingsLoaded && (
+        <Suspense fallback={null}>
+          <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        </Suspense>
+      )}
+    </ExposureProvider>
   )
 }
 

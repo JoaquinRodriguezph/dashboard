@@ -45,10 +45,11 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 
 /** Builds a backup and makes the browser download it as a .json file. */
 export async function downloadBackup({ includePhotos }: { includePhotos: boolean }): Promise<void> {
-  const photos: SerializedPhoto[] | undefined = includePhotos
-    ? await Promise.all(
-        (await getPhotos()).map(async ({ blob, ...rest }) => ({ ...rest, dataUrl: await blobToDataUrl(blob) })),
-      )
+  const stored = includePhotos ? await getPhotos() : []
+  // No photos → leave the field out entirely, so importing this file keeps
+  // whatever photos the other device has instead of wiping them.
+  const photos: SerializedPhoto[] | undefined = stored.length
+    ? await Promise.all(stored.map(async ({ blob, ...rest }) => ({ ...rest, dataUrl: await blobToDataUrl(blob) })))
     : undefined
 
   const file = { app: APP_ID, version: VERSION, exportedAt: new Date().toISOString(), data: await exportAll(), photos }
