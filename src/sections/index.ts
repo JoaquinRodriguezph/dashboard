@@ -1,5 +1,7 @@
 import type { ComponentType } from 'react'
+import { Affirmations } from './Affirmations'
 import { Dailies } from './Dailies'
+import { Goals } from './Goals'
 import { WeeklyGoal } from './WeeklyGoal'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17,4 +19,6 @@ export interface SectionConfig {
 export const SECTIONS: SectionConfig[] = [
   { id: 'weekly-goal', component: WeeklyGoal, width: 'full' },
   { id: 'dailies', component: Dailies, width: 'half' },
+  { id: 'goals', component: Goals, width: 'half' },
+  { id: 'affirmations', component: Affirmations, width: 'full' },
 ]
