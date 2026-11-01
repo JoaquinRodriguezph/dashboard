@@ -18,6 +18,8 @@ interface TextFormProps {
   onCancel?: () => void
   /** Empty the inputs after saving, so another item can be added straight away. */
   clearOnSubmit?: boolean
+  /** Focus the first input when the form appears (default true). */
+  autoFocus?: boolean
 }
 
 /**
@@ -25,7 +27,7 @@ interface TextFormProps {
  * Used for adding and editing items in every section.
  * Enter submits; Escape cancels.
  */
-export function TextForm({ fields, submitLabel, onSubmit, onCancel, clearOnSubmit }: TextFormProps) {
+export function TextForm({ fields, submitLabel, onSubmit, onCancel, clearOnSubmit, autoFocus = true }: TextFormProps) {
   const initialValues = () => Object.fromEntries(fields.map((f) => [f.name, f.initial ?? '']))
   const [values, setValues] = useState<Record<string, string>>(initialValues)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -64,7 +66,7 @@ export function TextForm({ fields, submitLabel, onSubmit, onCancel, clearOnSubmi
             placeholder={f.placeholder}
             aria-label={f.placeholder}
             aria-invalid={!!errors[f.name]}
-            autoFocus={i === 0}
+            autoFocus={autoFocus && i === 0}
             className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-base outline-none placeholder:text-muted focus:border-accent aria-invalid:border-danger sm:text-sm"
           />
           {errors[f.name] && <p className="mt-1 px-1 text-xs text-danger">{errors[f.name]}</p>}

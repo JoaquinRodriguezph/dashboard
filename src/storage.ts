@@ -42,8 +42,28 @@ function read<T>(key: string, fallback: T): T {
   }
 }
 
-function write(key: string, value: unknown): void {
+function write(key: DataKey, value: unknown): void {
   localStorage.setItem(PREFIX + key, JSON.stringify(value))
+  notify(key)
+}
+
+// ── Change notifications ─────────────────────────────────────────────────────
+// Lets one part of the UI react when another part changes data (e.g. the
+// header's Sunday reminder disappears once the weekly goal card saves a goal).
+// With Supabase, realtime subscriptions could call notify() the same way.
+
+export type DataKey = (typeof KEYS)[keyof typeof KEYS]
+type Listener = (key: DataKey) => void
+const listeners = new Set<Listener>()
+
+/** Calls `listener` whenever data is written. Returns a function that unsubscribes. */
+export function onDataChange(listener: Listener): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+function notify(key: DataKey): void {
+  listeners.forEach((listener) => listener(key))
 }
 
 function newId(): string {

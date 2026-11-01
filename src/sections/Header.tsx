@@ -2,6 +2,7 @@ import { Monitor, Moon, Settings as SettingsIcon, Sun } from 'lucide-react'
 import { useNow } from '../lib/useNow'
 import { useSettings } from '../lib/settings'
 import type { ThemePreference } from '../types'
+import { SundayGoalChip } from './SundayGoalChip'
 
 const NEXT_THEME: Record<ThemePreference, ThemePreference> = {
   system: 'light',
@@ -43,6 +44,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
           {greetingFor(now.getHours())}
           {name && `, ${name}`}
         </h1>
+        <SundayGoalChip />
       </div>
       <div className="flex shrink-0 gap-1">
         <button

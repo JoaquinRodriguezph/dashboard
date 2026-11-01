@@ -9,6 +9,9 @@ import { useToday } from '../lib/useToday'
 import { deleteWeeklyGoal, getWeeklyGoals, setWeeklyGoalCompleted, setWeeklyGoalText } from '../storage'
 import type { WeeklyGoal as WeeklyGoalType } from '../types'
 
+/** The header's Sunday reminder scrolls to this id. */
+export const WEEKLY_GOAL_CARD_ID = 'weekly-goal'
+
 function countdownLabel(days: number): string {
   if (days === 1) return 'Due tomorrow (Sunday)'
   return `${days} days left`
@@ -53,6 +56,7 @@ export function WeeklyGoal() {
 
   return (
     <Card
+      id={WEEKLY_GOAL_CARD_ID}
       title="Weekly major goal"
       meta={weekLabel(weekStart)}
       className={needsPrompt ? 'border-accent ring-4 ring-accent-soft' : ''}
@@ -89,6 +93,9 @@ export function WeeklyGoal() {
             submitLabel={current ? 'Save' : 'Set goal'}
             onSubmit={save}
             onCancel={current ? () => setEditing(false) : undefined}
+            // Only grab focus when you clicked Edit. On page load it would scroll
+            // the phone down to this card and open the keyboard.
+            autoFocus={editing}
           />
         </div>
       ) : (

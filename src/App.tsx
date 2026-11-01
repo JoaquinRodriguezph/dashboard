@@ -1,11 +1,11 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react'
 import { animated, Globals, useTrail } from '@react-spring/web'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { useReducedMotion } from './lib/useReducedMotion'
 import { useSettings } from './lib/settings'
 import { useTheme } from './lib/useTheme'
 import { Header } from './sections/Header'
-import { SECTIONS } from './sections'
+import { COLUMNS, SECTIONS } from './sections'
 import { SettingsPanel } from './settings/SettingsPanel'
 
 // lazy() puts the 3D scene (and all of three.js) in a separate file that is
@@ -52,7 +52,7 @@ export default function App() {
         </ErrorBoundary>
       )}
 
-      <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6">
+      <div className="mx-auto max-w-2xl px-4 pb-16 sm:px-6 lg:max-w-[1600px] lg:px-8">
         <Header onOpenSettings={() => setSettingsOpen(true)} />
         <Sections />
       </div>
@@ -62,20 +62,44 @@ export default function App() {
   )
 }
 
-/** Renders every registered section. Cards slide up one after another on load. */
+/** Typed way to set CSS custom properties (e.g. --mobile-order) in a style prop. */
+function cssVars(vars: Record<`--${string}`, string | number>): CSSProperties {
+  return vars as CSSProperties
+}
+
+// Sections sorted by mobileOrder. The entrance animation uses this order too,
+// so Dailies always appears first.
+const BY_PRIORITY = [...SECTIONS].sort((a, b) => a.mobileOrder - b.mobileOrder)
+
+/**
+ * Renders every registered section, each exactly once.
+ *
+ * Laptop: <main> is a 3-column grid and each column wrapper is a flex column,
+ * so cards in a column stack tightly regardless of their neighbours' heights.
+ *
+ * Phone: <main> is a single flex column and the column wrappers use
+ * `display: contents`, which makes the wrapper "disappear" so its cards
+ * become direct children of <main>. CSS `order` then sorts them by mobileOrder.
+ */
 function Sections() {
-  const trail = useTrail(SECTIONS.length, {
+  const trail = useTrail(BY_PRIORITY.length, {
     from: { opacity: 0, y: 14 },
     to: { opacity: 1, y: 0 },
     config: { tension: 280, friction: 26 },
   })
 
   return (
-    <main className="grid items-start gap-4 md:grid-cols-2">
-      {SECTIONS.map(({ id, component: Section, width }, i) => (
-        <animated.div key={id} style={trail[i]} className={width === 'full' ? 'md:col-span-2' : ''}>
-          <Section />
-        </animated.div>
+    <main className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.7fr)_minmax(0,1fr)] lg:items-start lg:gap-6">
+      {COLUMNS.map((column) => (
+        <div key={column} className="contents lg:flex lg:flex-col lg:gap-6">
+          {SECTIONS.filter((s) => s.column === column).map(({ id, component: Section, mobileOrder }) => (
+            <div key={id} style={cssVars({ '--mobile-order': mobileOrder })} className="order-(--mobile-order) lg:order-none">
+              <animated.div style={trail[BY_PRIORITY.findIndex((s) => s.id === id)]}>
+                <Section />
+              </animated.div>
+            </div>
+          ))}
+        </div>
       ))}
     </main>
   )

@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ExternalLink, Pencil, Plus, Trash2 } from 'lucide-r
 import { Card } from '../components/Card'
 import { CheckButton } from '../components/CheckButton'
 import { IconButton } from '../components/IconButton'
+import { ProgressRing } from '../components/ProgressRing'
 import { TextForm, type TextField } from '../components/TextForm'
 import { useToday } from '../lib/useToday'
 import { normalizeUrl } from '../lib/url'
@@ -28,6 +29,12 @@ function dailyFields(daily?: Daily): TextField[] {
       validate: (v) => (v && !normalizeUrl(v) ? "That doesn't look like a web address" : null),
     },
   ]
+}
+
+function progressLabel(done: number, total: number): string {
+  if (done === total) return 'All done for today'
+  const left = total - done
+  return `${left} left today`
 }
 
 export function Dailies() {
@@ -67,7 +74,9 @@ export function Dailies() {
   return (
     <Card
       title="Dailies"
-      meta={dailies.length > 0 && `${doneCount}/${dailies.length} done`}
+      variant="featured"
+      leading={dailies.length > 0 && <ProgressRing done={doneCount} total={dailies.length} />}
+      meta={dailies.length > 0 && progressLabel(doneCount, dailies.length)}
       actions={
         dailies.length > 0 && (
           <button
@@ -83,22 +92,6 @@ export function Dailies() {
         )
       }
     >
-      {dailies.length > 0 && (
-        <div
-          className="mb-3 h-1.5 overflow-hidden rounded-full bg-line"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={dailies.length}
-          aria-valuenow={doneCount}
-          aria-label="Today's progress"
-        >
-          <div
-            className="h-full rounded-full bg-accent transition-[width] duration-500 motion-reduce:transition-none"
-            style={{ width: `${(doneCount / dailies.length) * 100}%` }}
-          />
-        </div>
-      )}
-
       {dailies.length === 0 && !adding && (
         <p className="py-2 text-sm text-muted">No daily tasks yet. Add the things you want to do every day.</p>
       )}
@@ -132,14 +125,14 @@ export function Dailies() {
                   href={daily.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`min-w-0 flex-1 truncate py-2 hover:underline ${done ? 'text-muted line-through' : ''}`}
+                  className={`min-w-0 flex-1 truncate py-2.5 text-base hover:underline sm:text-lg ${done ? 'text-muted line-through' : ''}`}
                 >
                   {daily.title}
                 </a>
               ) : (
                 <span
                   onClick={async () => setDoneIds(await setDailyChecked(today, daily.id, !done))}
-                  className={`min-w-0 flex-1 cursor-pointer truncate py-2 select-none ${done ? 'text-muted line-through' : ''}`}
+                  className={`min-w-0 flex-1 cursor-pointer truncate py-2.5 text-base select-none sm:text-lg ${done ? 'text-muted line-through' : ''}`}
                 >
                   {daily.title}
                 </span>
