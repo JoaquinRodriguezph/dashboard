@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import { Dailies } from './Dailies'
+import { WeeklyGoal } from './WeeklyGoal'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The section registry. App.tsx renders these in order.
@@ -14,5 +15,6 @@ export interface SectionConfig {
 }
 
 export const SECTIONS: SectionConfig[] = [
+  { id: 'weekly-goal', component: WeeklyGoal, width: 'full' },
   { id: 'dailies', component: Dailies, width: 'half' },
 ]
