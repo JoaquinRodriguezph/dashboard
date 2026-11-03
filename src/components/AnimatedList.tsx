@@ -6,6 +6,11 @@ interface AnimatedListProps<T> {
   getKey: (item: T) => string
   children: (item: T) => ReactNode
   className?: string
+  /**
+   * Slide rows to their new place when the order changes (default true).
+   * Turn off while something else animates the move, e.g. drag-and-drop.
+   */
+  flip?: boolean
 }
 
 /**
@@ -20,7 +25,7 @@ interface AnimatedListProps<T> {
  * Items already there on the first render appear instantly (`initial: null`),
  * so nothing animates on page load.
  */
-export function AnimatedList<T>({ items, getKey, children, className = '' }: AnimatedListProps<T>) {
+export function AnimatedList<T>({ items, getKey, children, className = '', flip = true }: AnimatedListProps<T>) {
   const transitions = useTransition(items, {
     keys: getKey,
     initial: null,
@@ -37,7 +42,7 @@ export function AnimatedList<T>({ items, getKey, children, className = '' }: Ani
           {/* min-height: 0 lets the grid row shrink below the content's height.
               Clip only while animating, so focus outlines aren't cut off afterwards. */}
           <animated.div style={{ minHeight: 0, overflow: style.rows.to((r) => (r < 1 ? 'hidden' : 'visible')) }}>
-            <FlipItem>{children(item)}</FlipItem>
+            <FlipItem enabled={flip}>{children(item)}</FlipItem>
           </animated.div>
         </animated.li>
       ))}
@@ -53,7 +58,7 @@ export function AnimatedList<T>({ items, getKey, children, className = '' }: Ani
  * item slid to its new place. offsetTop ignores transforms, so an animation
  * that's already running doesn't confuse the measurement.
  */
-function FlipItem({ children }: { children: ReactNode }) {
+function FlipItem({ children, enabled }: { children: ReactNode; enabled: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const lastTop = useRef<number | null>(null)
   const [style, api] = useSpring(() => ({ y: 0, config: { tension: 420, friction: 34 } }))
@@ -62,7 +67,9 @@ function FlipItem({ children }: { children: ReactNode }) {
     const el = ref.current
     if (!el) return
     const top = el.offsetTop // relative to the <ul class="relative">
-    if (lastTop.current !== null && lastTop.current !== top) {
+    // Always remember the position, even when disabled, so re-enabling
+    // doesn't animate from a stale spot.
+    if (enabled && lastTop.current !== null && lastTop.current !== top) {
       api.start({ from: { y: lastTop.current - top }, to: { y: 0 } })
     }
     lastTop.current = top

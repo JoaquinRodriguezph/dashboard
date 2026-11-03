@@ -213,6 +213,16 @@ export async function moveDaily(id: string, direction: -1 | 1): Promise<Daily[]>
   return list
 }
 
+/** Saves a new order, e.g. after drag-and-drop. `ids` lists every daily in its new position. */
+export async function setDailyOrder(ids: string[]): Promise<Daily[]> {
+  const byId = new Map((await getDailies()).map((d) => [d.id, d]))
+  const list = ids.map((id) => byId.get(id)).filter((d): d is Daily => !!d)
+  // Safety net: keep any daily the caller didn't mention, at the end.
+  for (const d of byId.values()) if (!ids.includes(d.id)) list.push(d)
+  write(KEYS.dailies, list)
+  return list
+}
+
 /** IDs of dailies checked *today*. Checks from a previous day are ignored. */
 export async function getDailyChecks(today: DateKey): Promise<string[]> {
   const checks = read<DailyChecks | null>(KEYS.dailyChecks, null)

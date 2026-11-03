@@ -1,6 +1,20 @@
 import { useEffect, useState } from 'react'
 import { animated, useSpring } from '@react-spring/web'
-import { ArrowDown, ArrowUp, ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type Announcements,
+  type DragEndEvent,
+  type Modifier,
+  type UniqueIdentifier,
+} from '@dnd-kit/core'
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { ArrowDown, ArrowUp, ExternalLink, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 import { AnimatedList } from '../components/AnimatedList'
 import { buttonClass } from '../components/buttonStyles'
 import { Card } from '../components/Card'
@@ -18,6 +32,7 @@ import {
   getDailies,
   getDailyChecks,
   moveDaily,
+  setDailyOrder,
   setDailyChecked,
   updateDaily,
 } from '../storage'
@@ -34,6 +49,21 @@ function dailyFields(daily?: Daily): TextField[] {
       validate: (v) => (v && !normalizeUrl(v) ? "That doesn't look like a web address" : null),
     },
   ]
+}
+
+/** Dragging only moves up and down, never sideways. */
+const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 })
+
+/** What screen readers hear during a drag (dnd-kit's defaults would read out ids). */
+function announcements(dailies: Daily[]): Announcements {
+  const title = (id: UniqueIdentifier) => dailies.find((d) => d.id === id)?.title ?? 'task'
+  const position = (id: UniqueIdentifier) => dailies.findIndex((d) => d.id === id) + 1
+  return {
+    onDragStart: ({ active }) => `Picked up ${title(active.id)}.`,
+    onDragOver: ({ active, over }) => (over ? `${title(active.id)} is over position ${position(over.id)} of ${dailies.length}.` : undefined),
+    onDragEnd: ({ active, over }) => (over ? `${title(active.id)} dropped at position ${position(over.id)}.` : `${title(active.id)} dropped.`),
+    onDragCancel: ({ active }) => `Moving ${title(active.id)} was cancelled.`,
+  }
 }
 
 function progressLabel(done: number, total: number): string {
@@ -87,6 +117,29 @@ export function Dailies() {
     setDailies(await deleteDaily(daily.id))
   }
 
+  // ── Drag to reorder ──
+  // Pointer covers mouse AND touch (the handle has touch-action: none, so a drag
+  // there never scrolls the page). The small distance stops a tap from counting
+  // as a drag. Keyboard: focus a handle, Space to lift, arrows to move, Space to drop.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+  // dnd-kit already slides rows while dragging, so the list's own FLIP slide is
+  // paused during a drag and switched back on right after the drop has rendered.
+  const [flip, setFlip] = useState(true)
+
+  const handleDragEnd = async ({ active, over }: DragEndEvent) => {
+    if (over && active.id !== over.id) {
+      const from = dailies.findIndex((d) => d.id === active.id)
+      const to = dailies.findIndex((d) => d.id === over.id)
+      const reordered = arrayMove(dailies, from, to)
+      setDailies(reordered) // update the screen immediately…
+      void setDailyOrder(reordered.map((d) => d.id)) // …and save in the background
+    }
+    requestAnimationFrame(() => setFlip(true))
+  }
+
   if (!loaded) return null
 
   return (
@@ -121,32 +174,46 @@ export function Dailies() {
         <p className="py-2 text-sm text-muted">No daily tasks yet. Add the things you want to do every day.</p>
       )}
 
-      <AnimatedList items={dailies} getKey={(d) => d.id} className="-mx-1">
-        {(daily) =>
-          editingId === daily.id ? (
-            <div className="px-1 py-1">
-              <TextForm
-                fields={dailyFields(daily)}
-                submitLabel="Save"
-                onSubmit={(v) => handleEdit(daily.id, v)}
-                onCancel={() => setEditingId(null)}
-              />
-            </div>
-          ) : (
-            <DailyRow
-              daily={daily}
-              done={doneIds.includes(daily.id)}
-              onToggle={(checked) => toggle(daily, checked)}
-              managing={managing}
-              isFirst={dailies[0]?.id === daily.id}
-              isLast={dailies[dailies.length - 1]?.id === daily.id}
-              onMove={async (dir) => setDailies(await moveDaily(daily.id, dir))}
-              onEdit={() => setEditingId(daily.id)}
-              onDelete={() => handleDelete(daily)}
-            />
-          )
-        }
-      </AnimatedList>
+      {/* Drag-and-drop: DndContext tracks the drag, SortableContext knows the order. */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        modifiers={[verticalOnly]}
+        accessibility={{ announcements: announcements(dailies) }}
+        onDragStart={() => setFlip(false)}
+        onDragCancel={() => setFlip(true)}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={dailies.map((d) => d.id)} strategy={verticalListSortingStrategy}>
+          <AnimatedList items={dailies} getKey={(d) => d.id} className="-mx-1" flip={flip}>
+            {(daily) =>
+              editingId === daily.id ? (
+                <div className="px-1 py-1">
+                  <TextForm
+                    fields={dailyFields(daily)}
+                    submitLabel="Save"
+                    onSubmit={(v) => handleEdit(daily.id, v)}
+                    onCancel={() => setEditingId(null)}
+                  />
+                </div>
+              ) : (
+                <DailyRow
+                  daily={daily}
+                  done={doneIds.includes(daily.id)}
+                  onToggle={(checked) => toggle(daily, checked)}
+                  managing={managing}
+                  isFirst={dailies[0]?.id === daily.id}
+                  isLast={dailies[dailies.length - 1]?.id === daily.id}
+                  onMove={async (dir) => setDailies(await moveDaily(daily.id, dir))}
+                  onEdit={() => setEditingId(daily.id)}
+                  onDelete={() => handleDelete(daily)}
+                  canDrag={dailies.length > 1}
+                />
+              )
+            }
+          </AnimatedList>
+        </SortableContext>
+      </DndContext>
 
       <div className="mt-2">
         {adding ? (
@@ -171,11 +238,19 @@ interface DailyRowProps {
   onMove: (direction: -1 | 1) => void
   onEdit: () => void
   onDelete: () => void
+  canDrag: boolean
 }
 
-/** One task. Briefly glows in the accent color when you check it. */
-function DailyRow({ daily, done, onToggle, managing, isFirst, isLast, onMove, onEdit, onDelete }: DailyRowProps) {
+/**
+ * One task. Briefly glows in the accent color when you check it.
+ * Draggable by its grip handle (only the handle, so taps and scrolling elsewhere work normally).
+ */
+function DailyRow({ daily, done, onToggle, managing, isFirst, isLast, onMove, onEdit, onDelete, canDrag }: DailyRowProps) {
   const [{ glow }, glowApi] = useSpring(() => ({ glow: 0 }))
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: daily.id,
+    disabled: !canDrag,
+  })
 
   const handleToggle = (checked: boolean) => {
     if (checked) glowApi.start({ from: { glow: 1 }, to: { glow: 0 }, config: { duration: 400 } })
@@ -186,9 +261,32 @@ function DailyRow({ daily, done, onToggle, managing, isFirst, isLast, onMove, on
 
   return (
     <animated.div
-      style={{ backgroundColor: glow.to((g) => `color-mix(in oklab, var(--accent) ${g * 18}%, transparent)`) }}
-      className="flex items-center gap-1 rounded-xl px-1 transition-colors hover:bg-surface-hover/70 active:bg-surface-hover"
+      ref={setNodeRef}
+      style={{
+        backgroundColor: glow.to((g) => `color-mix(in oklab, var(--accent) ${g * 18}%, transparent)`),
+        // dnd-kit moves rows with a transform while dragging and animates them into place.
+        transform: CSS.Translate.toString(transform),
+        transition,
+      }}
+      className={`flex items-center gap-1 rounded-xl px-1 transition-colors hover:bg-surface-hover/70 active:bg-surface-hover ${
+        isDragging ? 'relative z-10 bg-surface shadow-lg ring-1 ring-accent/40' : ''
+      }`}
     >
+      {canDrag && (
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+          aria-label={`Reorder "${daily.title}"`}
+          title="Drag to reorder (or focus and press Space, then use arrow keys)"
+          className={`-mr-1 inline-flex h-9 w-6 shrink-0 touch-none items-center justify-center rounded-md text-muted/60 transition-colors hover:bg-surface-hover hover:text-fg ${
+            isDragging ? 'cursor-grabbing text-accent' : 'cursor-grab'
+          }`}
+        >
+          <GripVertical size={16} />
+        </button>
+      )}
       <CheckButton checked={done} label={daily.title} onChange={handleToggle} />
       {daily.url ? (
         <a href={daily.url} target="_blank" rel="noopener noreferrer" className={`${titleClass} rounded hover:underline`}>
