@@ -2,20 +2,22 @@ import { useEffect, useState } from 'react'
 import { animated, useSpring } from '@react-spring/web'
 import { Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react'
 import { AnimatedList } from '../components/AnimatedList'
+import { buttonClass } from '../components/buttonStyles'
 import { Card } from '../components/Card'
 import { CheckButton } from '../components/CheckButton'
 import { IconButton } from '../components/IconButton'
 import { Tabs } from '../components/Tabs'
 import { TextForm } from '../components/TextForm'
 import { useSettings } from '../lib/settings'
-import { addGoal, deleteGoal, getGoals, setGoalCompleted, updateGoalText } from '../storage'
+import { addGoal, clearCompletedGoals, deleteGoal, getGoals, setGoalCompleted, updateGoalText } from '../storage'
 import type { Goal, GoalList } from '../types'
-import { buttonClass } from '../components/buttonStyles'
 
 const TABS: { id: GoalList; label: string }[] = [
   { id: 'short', label: 'Short-term goals' },
   { id: 'life', label: 'Life goals' },
 ]
+
+const TAB_NOUN: Record<GoalList, string> = { short: 'short-term', life: 'life' }
 
 export function Goals() {
   const { settings, updateSettings } = useSettings()
@@ -23,7 +25,6 @@ export function Goals() {
 
   const [goals, setGoals] = useState<Goal[]>([])
   const [tab, setTab] = useState<GoalList>('short')
-  const [managing, setManaging] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -43,6 +44,12 @@ export function Goals() {
   const handleDelete = async (g: Goal) => {
     if (!window.confirm(`Delete "${g.text}"?`)) return
     setGoals(await deleteGoal(g.id))
+  }
+
+  const handleClearCompleted = async () => {
+    const what = `${completedCount} completed ${TAB_NOUN[tab]} goal${completedCount === 1 ? '' : 's'}`
+    if (!window.confirm(`Permanently delete ${what}?`)) return
+    setGoals(await clearCompletedGoals(tab))
   }
 
   // The list fades and slides in slightly each time the tab changes.
@@ -70,16 +77,9 @@ export function Goals() {
           >
             {hideCompleted ? <EyeOff size={16} /> : <Eye size={16} />}
           </IconButton>
-          {goals.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setManaging((m) => !m)
-                setEditingId(null)
-              }}
-              className={buttonClass('ghost')}
-            >
-              {managing ? 'Done' : 'Edit'}
+          {completedCount > 0 && (
+            <button type="button" onClick={handleClearCompleted} className={buttonClass('ghost')}>
+              Clear completed
             </button>
           )}
         </>
@@ -127,16 +127,12 @@ export function Goals() {
                 >
                   {g.text}
                 </span>
-                {managing && (
-                  <>
-                    <IconButton label="Edit" onClick={() => setEditingId(g.id)}>
-                      <Pencil size={16} />
-                    </IconButton>
-                    <IconButton label="Delete" tone="danger" onClick={() => handleDelete(g)}>
-                      <Trash2 size={16} />
-                    </IconButton>
-                  </>
-                )}
+                <IconButton label={`Edit "${g.text}"`} onClick={() => setEditingId(g.id)}>
+                  <Pencil size={16} />
+                </IconButton>
+                <IconButton label={`Delete "${g.text}"`} tone="danger" onClick={() => handleDelete(g)}>
+                  <Trash2 size={16} />
+                </IconButton>
               </div>
             )
           }
@@ -153,11 +149,7 @@ export function Goals() {
               clearOnSubmit
             />
           ) : (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className={buttonClass('ghost', 'md')}
-            >
+            <button type="button" onClick={() => setAdding(true)} className={buttonClass('ghost', 'md')}>
               <Plus size={16} /> Add goal
             </button>
           )}

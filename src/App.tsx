@@ -6,7 +6,7 @@ import { useReducedMotion } from './lib/useReducedMotion'
 import { useSettings } from './lib/settings'
 import { useTheme } from './lib/useTheme'
 import { Header } from './sections/Header'
-import { COLUMNS, SECTIONS } from './sections'
+import { ROWS, SECTIONS } from './sections'
 
 // lazy() puts the 3D scene (and all of three.js) in a separate file that is
 // only downloaded when <Background3D> is first rendered.
@@ -88,30 +88,33 @@ const BY_PRIORITY = [...SECTIONS].sort((a, b) => a.mobileOrder - b.mobileOrder)
 /**
  * Renders every registered section, each exactly once.
  *
- * Laptop: <main> is a 3-column grid and each column wrapper is a flex column,
- * so cards in a column stack tightly regardless of their neighbours' heights.
+ * Laptop: each row (main, bottom) is a grid, and each area inside it is a flex
+ * column, so cards in an area stack tightly regardless of their neighbours' heights.
  *
- * Phone: <main> is a single flex column and the column wrappers use
- * `display: contents`, which makes the wrapper "disappear" so its cards
- * become direct children of <main>. CSS `order` then sorts them by mobileOrder.
+ * Phone: <main> is a single flex column, and the row and area wrappers use
+ * `display: contents`, which makes the wrappers "disappear" so every card
+ * becomes a direct child of <main>. CSS `order` then sorts them by mobileOrder.
  */
 function Sections() {
   const trail = useTrail(BY_PRIORITY.length, {
     from: { opacity: 0, y: 14 },
     to: { opacity: 1, y: 0 },
     config: { tension: 340, friction: 30 }, // each card ≈ 350 ms, staggered
-
   })
 
   return (
-    <main className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.7fr)_minmax(0,1fr)] lg:items-start lg:gap-6">
-      {COLUMNS.map((column) => (
-        <div key={column} className="contents lg:flex lg:flex-col lg:gap-6">
-          {SECTIONS.filter((s) => s.column === column).map(({ id, component: Section, mobileOrder }) => (
-            <div key={id} style={cssVars({ '--mobile-order': mobileOrder })} className="order-(--mobile-order) lg:order-none">
-              <animated.div style={trail[BY_PRIORITY.findIndex((s) => s.id === id)]}>
-                <Section />
-              </animated.div>
+    <main className="flex flex-col gap-4 lg:gap-6">
+      {ROWS.map((row) => (
+        <div key={row.id} className={`contents lg:grid lg:items-start lg:gap-6 ${row.gridClass}`}>
+          {row.areas.map((area) => (
+            <div key={area} className="contents lg:flex lg:flex-col lg:gap-6">
+              {SECTIONS.filter((s) => s.area === area).map(({ id, component: Section, mobileOrder }) => (
+                <div key={id} style={cssVars({ '--mobile-order': mobileOrder })} className="order-(--mobile-order) lg:order-none">
+                  <animated.div style={trail[BY_PRIORITY.findIndex((s) => s.id === id)]}>
+                    <Section />
+                  </animated.div>
+                </div>
+              ))}
             </div>
           ))}
         </div>

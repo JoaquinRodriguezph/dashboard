@@ -106,10 +106,21 @@ export interface AllData {
   affirmations: Affirmation[]
   goals: Goal[]
   todos: Todo[]
+  ideas: Idea[]
+}
+
+/** Something I could do. Can be sent to the To-Do list, after which it's marked as added. */
+export interface Idea {
+  id: string
+  text: string
+  createdAt: string
+  /** Set when the idea was turned into a To-Do task. */
+  todoId?: string
+  addedToTodoAt?: string
 }
 
 /**
  * What an import provides. Lists that were added in later versions are optional:
  * an older backup doesn't have them, and importing it keeps the current ones.
  */
-export type ImportData = Omit<AllData, 'todos'> & Partial<Pick<AllData, 'todos'>>
+export type ImportData = Omit<AllData, 'todos' | 'ideas'> & Partial<Pick<AllData, 'todos' | 'ideas'>>

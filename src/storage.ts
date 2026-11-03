@@ -25,6 +25,7 @@ import type {
   ExposureResult,
   Goal,
   GoalList,
+  Idea,
   ImportData,
   Photo,
   Settings,
@@ -42,6 +43,7 @@ const KEYS = {
   affirmations: 'affirmations',
   goals: 'goals',
   todos: 'todos',
+  ideas: 'ideas',
 } as const
 
 /** Read a JSON value, falling back if it's missing or corrupted. */
@@ -312,6 +314,51 @@ export async function deleteGoal(id: string): Promise<Goal[]> {
   return goals
 }
 
+/** Permanently deletes the completed goals in one list ("short" or "life"). */
+export async function clearCompletedGoals(list: GoalList): Promise<Goal[]> {
+  const goals = (await getGoals()).filter((g) => !(g.list === list && g.completed))
+  write(KEYS.goals, goals)
+  return goals
+}
+
+// ── Ideas ────────────────────────────────────────────────────────────────────
+
+export async function getIdeas(): Promise<Idea[]> {
+  return read<Idea[]>(KEYS.ideas, [])
+}
+
+export async function addIdea(text: string): Promise<Idea[]> {
+  const ideas = [...(await getIdeas()), { id: newId(), text, createdAt: nowIso() }]
+  write(KEYS.ideas, ideas)
+  return ideas
+}
+
+export async function updateIdeaText(id: string, text: string): Promise<Idea[]> {
+  const ideas = (await getIdeas()).map((i) => (i.id === id ? { ...i, text } : i))
+  write(KEYS.ideas, ideas)
+  return ideas
+}
+
+export async function deleteIdea(id: string): Promise<Idea[]> {
+  const ideas = (await getIdeas()).filter((i) => i.id !== id)
+  write(KEYS.ideas, ideas)
+  return ideas
+}
+
+/**
+ * Turns an idea into a To-Do task. The idea stays, marked "added to To-Do".
+ * (The To-Do card hears about the new task through onDataChange('todos').)
+ */
+export async function ideaToTodo(ideaId: string, dueDate?: DateKey): Promise<Idea[]> {
+  const idea = (await getIdeas()).find((i) => i.id === ideaId)
+  if (!idea) return getIdeas()
+  const todos = await addTodo({ text: idea.text, dueDate })
+  const todoId = todos[todos.length - 1].id
+  const ideas = (await getIdeas()).map((i) => (i.id === ideaId ? { ...i, todoId, addedToTodoAt: nowIso() } : i))
+  write(KEYS.ideas, ideas)
+  return ideas
+}
+
 // ── To-Do ────────────────────────────────────────────────────────────────────
 
 export async function getTodos(): Promise<Todo[]> {
@@ -398,6 +445,7 @@ export async function exportAll(): Promise<AllData> {
     affirmations: await getAffirmations(),
     goals: await getGoals(),
     todos: await getTodos(),
+    ideas: await getIdeas(),
   }
 }
 
@@ -421,4 +469,5 @@ export async function importAll(data: ImportData, photos?: Photo[]): Promise<voi
   write(KEYS.goals, data.goals)
   // Lists added in later versions: missing from older backups → keep what's here.
   if (data.todos) write(KEYS.todos, data.todos)
+  if (data.ideas) write(KEYS.ideas, data.ideas)
 }

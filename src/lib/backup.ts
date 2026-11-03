@@ -10,7 +10,7 @@ import type { DoubleExposureSettings, ImportData, Photo, Settings, Todo } from '
 // Version history:
 //   1: original format (no photos, no doubleExposure settings)
 //   2: adds settings.doubleExposure and an optional "photos" list
-//   3: adds "todos" (optional on import: older files keep your current to-dos)
+//   3: adds "todos" and "ideas" (optional on import: a file without them keeps your current ones)
 // Older versions are still accepted; missing fields get their defaults.
 
 const APP_ID = 'personal-dashboard'
@@ -156,6 +156,16 @@ function validateData(d: Obj): ImportData {
       }
     }),
     todos: d.todos === undefined ? undefined : list(d, 'todos', validateTodo),
+    ideas:
+      d.ideas === undefined
+        ? undefined
+        : list(d, 'ideas', (v, w) => ({
+            id: str(v, 'id', w),
+            text: str(v, 'text', w),
+            createdAt: str(v, 'createdAt', w),
+            todoId: optStr(v, 'todoId', w),
+            addedToTodoAt: optStr(v, 'addedToTodoAt', w),
+          })),
   }
 }
 

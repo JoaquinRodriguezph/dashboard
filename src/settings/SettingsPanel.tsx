@@ -56,11 +56,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     const summary =
       `${data.dailies.length} dailies, ${data.goals.length} goals, ` +
       `${data.affirmations.length} affirmations, ${data.weeklyGoals.length} weekly goals` +
-      (data.todos ? `, ${data.todos.length} to-dos` : '')
+      (data.todos ? `, ${data.todos.length} to-dos` : '') +
+      (data.ideas ? `, ${data.ideas.length} ideas` : '')
     // Things an older backup doesn't contain are kept as they are now.
-    const kept = [!data.todos && 'to-dos', !photos && 'photos'].filter(Boolean)
+    const kept = [!data.todos && 'to-dos', !data.ideas && 'ideas', !photos && 'photos'].filter((x): x is string => !!x)
     const photoNote = photos ? `${photos.length} photo${photos.length === 1 ? '' : 's'} (these REPLACE your current photos)\n` : ''
-    const keptNote = kept.length ? `Not in this backup, so your current ${kept.join(' and ')} are kept.\n` : ''
+    const keptList = kept.length > 1 ? `${kept.slice(0, -1).join(', ')} and ${kept[kept.length - 1]}` : kept[0]
+    const keptNote = kept.length ? `Not in this backup, so your current ${keptList} are kept.\n` : ''
     const confirmed = window.confirm(
       `Replace ALL current data with this backup from ${when}?\n\n${summary}\n${photoNote}${keptNote}\nTip: export your current data first if you might want it back.`,
     )
