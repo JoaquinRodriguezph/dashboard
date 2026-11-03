@@ -94,7 +94,7 @@ const nowIso = () => new Date().toISOString()
 // once at startup (App waits for it before showing any section).
 
 const SCHEMA_KEY = 'dash.schemaVersion'
-const CURRENT_SCHEMA = 3
+const CURRENT_SCHEMA = 4
 
 const MIGRATIONS: Record<number, () => void> = {
   // v1 → v2: settings gained `doubleExposure`. Fill in its defaults.
@@ -105,6 +105,12 @@ const MIGRATIONS: Record<number, () => void> = {
   // v2 → v3: new To-Do list (starts empty) and a hideCompletedTodos setting.
   // Goals are untouched.
   3: () => {
+    const stored = read<Partial<Settings> | null>(KEYS.settings, null)
+    if (stored) write(KEYS.settings, mergeSettings(stored))
+  },
+  // v3 → v4: double exposure gained a colour mode (default: natural).
+  // The cached image regenerates by itself (ALGORITHM_VERSION changed).
+  4: () => {
     const stored = read<Partial<Settings> | null>(KEYS.settings, null)
     if (stored) write(KEYS.settings, mergeSettings(stored))
   },
@@ -140,10 +146,11 @@ export const DEFAULT_DOUBLE_EXPOSURE: DoubleExposureSettings = {
   seed: 1,
   exposure: 1.4,
   grain: 0.35,
-  lightLeak: 0.4,
+  lightLeak: 0.25,
   vignette: 0.5,
   misalignment: 0.3,
   frameOverlap: 0.25,
+  color: 'natural',
 }
 
 export const DEFAULT_SETTINGS: Settings = {

@@ -3,10 +3,16 @@ import { Dices, Download, ImagePlus, LoaderCircle, RotateCcw, X } from 'lucide-r
 import { buttonClass } from '../components/buttonStyles'
 import { MAX_PHOTOS, useExposure } from '../lib/exposure/ExposureContext'
 import { DEFAULT_DOUBLE_EXPOSURE } from '../storage'
-import type { DoubleExposureSettings as Params, Photo } from '../types'
+import type { DoubleExposureSettings as Params, ExposureColor, Photo } from '../types'
+
+const COLORS: { id: ExposureColor; label: string }[] = [
+  { id: 'natural', label: 'Natural' },
+  { id: 'warm', label: 'Warm film' },
+  { id: 'bw', label: 'Black & white' },
+]
 
 interface SliderConfig {
-  key: keyof Omit<Params, 'enabled' | 'seed'>
+  key: Exclude<keyof Params, 'enabled' | 'seed' | 'color'>
   label: string
   hint: string
   min: number
@@ -17,7 +23,7 @@ interface SliderConfig {
 const SLIDERS: SliderConfig[] = [
   { key: 'exposure', label: 'Exposure', hint: 'How much light the film catches', min: 0.5, max: 2.5, step: 0.05 },
   { key: 'grain', label: 'Grain', hint: 'Film grain in the midtones', min: 0, max: 1, step: 0.01 },
-  { key: 'lightLeak', label: 'Light leak', hint: 'Warm glow from one edge', min: 0, max: 1, step: 0.01 },
+  { key: 'lightLeak', label: 'Light leak', hint: 'Glow from one edge (white, or orange in Warm film)', min: 0, max: 1, step: 0.01 },
   { key: 'vignette', label: 'Vignette', hint: 'Darker corners', min: 0, max: 1, step: 0.01 },
   { key: 'misalignment', label: 'Misalignment', hint: 'Random shift, tilt and zoom per photo', min: 0, max: 1, step: 0.01 },
   { key: 'frameOverlap', label: 'Frame overlap', hint: 'Film-advance offset between frames', min: 0, max: 1, step: 0.01 },
@@ -119,6 +125,31 @@ export function DoubleExposureSettings() {
             </button>
           </div>
 
+          {/* Colour mode */}
+          <fieldset className="mt-4">
+            <legend className="mb-1.5 text-sm">Color</legend>
+            <div className="flex rounded-xl bg-surface p-1">
+              {COLORS.map((c) => (
+                <label
+                  key={c.id}
+                  className={`flex-1 cursor-pointer rounded-lg px-2 py-1.5 text-center text-sm transition-colors has-focus-visible:outline-2 has-focus-visible:outline-accent ${
+                    settings.color === c.id ? 'bg-accent text-accent-fg' : 'text-muted hover:text-fg'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="exposure-color"
+                    value={c.id}
+                    checked={settings.color === c.id}
+                    onChange={() => updateExposure({ color: c.id })}
+                    className="sr-only"
+                  />
+                  {c.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
           {/* Sliders */}
           <div className="mt-4 space-y-3">
             {SLIDERS.map((s) => (
@@ -142,7 +173,9 @@ export function DoubleExposureSettings() {
             ))}
             <button
               type="button"
-              onClick={() => updateExposure({ ...DEFAULT_DOUBLE_EXPOSURE, enabled: settings.enabled, seed: settings.seed })}
+              onClick={() =>
+                updateExposure({ ...DEFAULT_DOUBLE_EXPOSURE, enabled: settings.enabled, seed: settings.seed, color: settings.color })
+              }
               className={buttonClass('ghost')}
             >
               <RotateCcw size={14} /> Reset sliders

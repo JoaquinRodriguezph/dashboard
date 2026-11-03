@@ -37,7 +37,11 @@ export interface DoubleExposureSettings {
   vignette: number
   misalignment: number
   frameOverlap: number
+  color: ExposureColor
 }
+
+/** natural = your photos' true colours; warm = orange-tinted film look; bw = black & white. */
+export type ExposureColor = 'natural' | 'warm' | 'bw'
 
 /** An uploaded photo, already downscaled. Stored in IndexedDB (not localStorage). */
 export interface Photo {

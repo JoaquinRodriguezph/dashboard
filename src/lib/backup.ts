@@ -115,6 +115,7 @@ function validateDoubleExposure(raw: unknown): DoubleExposureSettings {
     vignette: pick('vignette', 0, 1),
     misalignment: pick('misalignment', 0, 1),
     frameOverlap: pick('frameOverlap', 0, 1),
+    color: d.color === 'warm' || d.color === 'bw' || d.color === 'natural' ? d.color : DEFAULT_DOUBLE_EXPOSURE.color,
   }
 }
 
