@@ -25,8 +25,10 @@ import type {
   ExposureResult,
   Goal,
   GoalList,
+  ImportData,
   Photo,
   Settings,
+  Todo,
   WeeklyGoal,
 } from './types'
 
@@ -39,6 +41,7 @@ const KEYS = {
   weeklyGoals: 'weeklyGoals',
   affirmations: 'affirmations',
   goals: 'goals',
+  todos: 'todos',
 } as const
 
 /** Read a JSON value, falling back if it's missing or corrupted. */
@@ -89,11 +92,17 @@ const nowIso = () => new Date().toISOString()
 // once at startup (App waits for it before showing any section).
 
 const SCHEMA_KEY = 'dash.schemaVersion'
-const CURRENT_SCHEMA = 2
+const CURRENT_SCHEMA = 3
 
 const MIGRATIONS: Record<number, () => void> = {
   // v1 → v2: settings gained `doubleExposure`. Fill in its defaults.
   2: () => {
+    const stored = read<Partial<Settings> | null>(KEYS.settings, null)
+    if (stored) write(KEYS.settings, mergeSettings(stored))
+  },
+  // v2 → v3: new To-Do list (starts empty) and a hideCompletedTodos setting.
+  // Goals are untouched.
+  3: () => {
     const stored = read<Partial<Settings> | null>(KEYS.settings, null)
     if (stored) write(KEYS.settings, mergeSettings(stored))
   },
@@ -139,6 +148,7 @@ export const DEFAULT_SETTINGS: Settings = {
   name: '',
   theme: 'system',
   hideCompletedGoals: false,
+  hideCompletedTodos: false,
   doubleExposure: DEFAULT_DOUBLE_EXPOSURE,
 }
 
@@ -302,6 +312,46 @@ export async function deleteGoal(id: string): Promise<Goal[]> {
   return goals
 }
 
+// ── To-Do ────────────────────────────────────────────────────────────────────
+
+export async function getTodos(): Promise<Todo[]> {
+  return read<Todo[]>(KEYS.todos, [])
+}
+
+export async function addTodo(input: { text: string; dueDate?: DateKey }): Promise<Todo[]> {
+  const todos = [...(await getTodos()), { ...input, id: newId(), completed: false, createdAt: nowIso() }]
+  write(KEYS.todos, todos)
+  return todos
+}
+
+export async function updateTodo(id: string, patch: { text?: string; dueDate?: DateKey }): Promise<Todo[]> {
+  // Passing `dueDate: undefined` in the patch removes the date.
+  const todos = (await getTodos()).map((t) => (t.id === id ? { ...t, ...patch } : t))
+  write(KEYS.todos, todos)
+  return todos
+}
+
+export async function setTodoCompleted(id: string, completed: boolean): Promise<Todo[]> {
+  const todos = (await getTodos()).map((t) =>
+    t.id === id ? { ...t, completed, completedAt: completed ? nowIso() : undefined } : t,
+  )
+  write(KEYS.todos, todos)
+  return todos
+}
+
+export async function deleteTodo(id: string): Promise<Todo[]> {
+  const todos = (await getTodos()).filter((t) => t.id !== id)
+  write(KEYS.todos, todos)
+  return todos
+}
+
+/** Permanently deletes every completed task. */
+export async function clearCompletedTodos(): Promise<Todo[]> {
+  const todos = (await getTodos()).filter((t) => !t.completed)
+  write(KEYS.todos, todos)
+  return todos
+}
+
 // ── Photos (IndexedDB) ───────────────────────────────────────────────────────
 // With Supabase, photos would go to Supabase Storage (files) plus a table row
 // with width/height/createdAt. Callers only ever see Photo objects with a Blob.
@@ -347,6 +397,7 @@ export async function exportAll(): Promise<AllData> {
     weeklyGoals: await getWeeklyGoals(),
     affirmations: await getAffirmations(),
     goals: await getGoals(),
+    todos: await getTodos(),
   }
 }
 
@@ -355,7 +406,7 @@ export async function exportAll(): Promise<AllData> {
  * `photos`: pass an array to replace all photos, or undefined to keep the current ones
  * (older backups and backups exported without photos).
  */
-export async function importAll(data: AllData, photos?: Photo[]): Promise<void> {
+export async function importAll(data: ImportData, photos?: Photo[]): Promise<void> {
   // Photos first: it's the step most likely to fail (disk space). If it throws,
   // nothing else has been touched yet.
   if (photos) {
@@ -368,4 +419,6 @@ export async function importAll(data: AllData, photos?: Photo[]): Promise<void> 
   write(KEYS.weeklyGoals, data.weeklyGoals)
   write(KEYS.affirmations, data.affirmations)
   write(KEYS.goals, data.goals)
+  // Lists added in later versions: missing from older backups → keep what's here.
+  if (data.todos) write(KEYS.todos, data.todos)
 }

@@ -1,13 +1,17 @@
 import { useState, type FormEvent } from 'react'
 import { buttonClass } from './buttonStyles'
+import { DateField } from './DateField'
 
 export interface TextField {
   name: string
   placeholder: string
   initial?: string
   required?: boolean
-  /** "url" shows the URL keyboard on phones. (Validation is up to `validate`.) */
-  type?: 'text' | 'url'
+  /**
+   * "url" shows the URL keyboard on phones (validation is up to `validate`).
+   * "date" shows a date picker with quick chips; the value is "YYYY-MM-DD" or "".
+   */
+  type?: 'text' | 'url' | 'date'
   /** Return an error message to block saving, or null if the value is fine. */
   validate?: (value: string) => string | null
 }
@@ -58,18 +62,26 @@ export function TextForm({ fields, submitLabel, onSubmit, onCancel, clearOnSubmi
     >
       {fields.map((f, i) => (
         <div key={f.name}>
-          <input
-            type="text"
-            inputMode={f.type === 'url' ? 'url' : undefined}
-            autoCapitalize={f.type === 'url' ? 'none' : undefined}
-            value={values[f.name]}
-            onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
-            placeholder={f.placeholder}
-            aria-label={f.placeholder}
-            aria-invalid={!!errors[f.name]}
-            autoFocus={autoFocus && i === 0}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-base outline-none placeholder:text-muted focus:border-accent aria-invalid:border-danger sm:text-sm"
-          />
+          {f.type === 'date' ? (
+            <DateField
+              value={values[f.name]}
+              onChange={(value) => setValues((v) => ({ ...v, [f.name]: value }))}
+              label={f.placeholder}
+            />
+          ) : (
+            <input
+              type="text"
+              inputMode={f.type === 'url' ? 'url' : undefined}
+              autoCapitalize={f.type === 'url' ? 'none' : undefined}
+              value={values[f.name]}
+              onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+              placeholder={f.placeholder}
+              aria-label={f.placeholder}
+              aria-invalid={!!errors[f.name]}
+              autoFocus={autoFocus && i === 0}
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-base outline-none placeholder:text-muted focus:border-accent aria-invalid:border-danger sm:text-sm"
+            />
+          )}
           {errors[f.name] && <p className="mt-1 px-1 text-xs text-danger">{errors[f.name]}</p>}
         </div>
       ))}

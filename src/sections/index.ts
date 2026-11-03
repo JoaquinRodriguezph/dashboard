@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import { Affirmations } from './Affirmations'
 import { Dailies } from './Dailies'
 import { Goals } from './Goals'
+import { Todo } from './Todo'
 import { WeeklyGoal } from './WeeklyGoal'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -27,7 +28,9 @@ export const COLUMNS: SectionColumn[] = ['left', 'center', 'right']
 
 export const SECTIONS: SectionConfig[] = [
   { id: 'dailies', component: Dailies, column: 'center', mobileOrder: 1 },
-  { id: 'affirmations', component: Affirmations, column: 'left', mobileOrder: 4 },
-  { id: 'weekly-goal', component: WeeklyGoal, column: 'left', mobileOrder: 2 },
-  { id: 'goals', component: Goals, column: 'right', mobileOrder: 3 },
+  { id: 'todo', component: Todo, column: 'right', mobileOrder: 2 },
+  { id: 'affirmations', component: Affirmations, column: 'left', mobileOrder: 3 },
+  { id: 'weekly-goal', component: WeeklyGoal, column: 'left', mobileOrder: 4 },
+  // Temporary spot until stage 2 gives Goals its own row at the bottom.
+  { id: 'goals', component: Goals, column: 'left', mobileOrder: 5 },
 ]

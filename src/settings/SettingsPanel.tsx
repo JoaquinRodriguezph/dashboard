@@ -55,12 +55,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     const when = exportedAt ? new Date(exportedAt).toLocaleString() : 'an unknown date'
     const summary =
       `${data.dailies.length} dailies, ${data.goals.length} goals, ` +
-      `${data.affirmations.length} affirmations, ${data.weeklyGoals.length} weekly goals`
-    const photoNote = photos
-      ? `${photos.length} photo${photos.length === 1 ? '' : 's'} (these REPLACE your current photos)`
-      : 'No photos in this backup: your current photos are kept.'
+      `${data.affirmations.length} affirmations, ${data.weeklyGoals.length} weekly goals` +
+      (data.todos ? `, ${data.todos.length} to-dos` : '')
+    // Things an older backup doesn't contain are kept as they are now.
+    const kept = [!data.todos && 'to-dos', !photos && 'photos'].filter(Boolean)
+    const photoNote = photos ? `${photos.length} photo${photos.length === 1 ? '' : 's'} (these REPLACE your current photos)\n` : ''
+    const keptNote = kept.length ? `Not in this backup, so your current ${kept.join(' and ')} are kept.\n` : ''
     const confirmed = window.confirm(
-      `Replace ALL current data with this backup from ${when}?\n\n${summary}\n${photoNote}\n\nTip: export your current data first if you might want it back.`,
+      `Replace ALL current data with this backup from ${when}?\n\n${summary}\n${photoNote}${keptNote}\nTip: export your current data first if you might want it back.`,
     )
     if (!confirmed) return
 

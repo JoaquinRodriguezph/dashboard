@@ -9,7 +9,18 @@ export interface Settings {
   name: string
   theme: ThemePreference
   hideCompletedGoals: boolean
+  hideCompletedTodos: boolean
   doubleExposure: DoubleExposureSettings
+}
+
+/** A one-off task. `dueDate` is the day it should be finished by (local date). */
+export interface Todo {
+  id: string
+  text: string
+  dueDate?: DateKey
+  completed: boolean
+  createdAt: string
+  completedAt?: string
 }
 
 /**
@@ -94,4 +105,11 @@ export interface AllData {
   weeklyGoals: WeeklyGoal[]
   affirmations: Affirmation[]
   goals: Goal[]
+  todos: Todo[]
 }
+
+/**
+ * What an import provides. Lists that were added in later versions are optional:
+ * an older backup doesn't have them, and importing it keeps the current ones.
+ */
+export type ImportData = Omit<AllData, 'todos'> & Partial<Pick<AllData, 'todos'>>

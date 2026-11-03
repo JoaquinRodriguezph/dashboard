@@ -1,6 +1,6 @@
 import { DEFAULT_DOUBLE_EXPOSURE, DEFAULT_SETTINGS, exportAll, getPhotos } from '../storage'
 import { toDateKey } from './dates'
-import type { AllData, DoubleExposureSettings, Photo, Settings } from '../types'
+import type { DoubleExposureSettings, ImportData, Photo, Settings, Todo } from '../types'
 
 // A backup file looks like:
 //   { "app": "personal-dashboard", "version": 2, "exportedAt": "...",
@@ -10,10 +10,11 @@ import type { AllData, DoubleExposureSettings, Photo, Settings } from '../types'
 // Version history:
 //   1: original format (no photos, no doubleExposure settings)
 //   2: adds settings.doubleExposure and an optional "photos" list
+//   3: adds "todos" (optional on import: older files keep your current to-dos)
 // Older versions are still accepted; missing fields get their defaults.
 
 const APP_ID = 'personal-dashboard'
-const VERSION = 2
+const VERSION = 3
 const MAX_FILE_BYTES = 100 * 1024 * 1024 // photos make backups big
 
 /** How a photo is written in the JSON file: the JPEG as a base64 "data URL". */
@@ -29,7 +30,7 @@ export interface BackupFile {
   app: typeof APP_ID
   version: number
   exportedAt: string
-  data: AllData
+  data: ImportData
   /** Present only if the backup was exported with photos. */
   photos?: Photo[]
 }
@@ -117,7 +118,7 @@ function validateDoubleExposure(raw: unknown): DoubleExposureSettings {
   }
 }
 
-function validateData(d: Obj): AllData {
+function validateData(d: Obj): ImportData {
   const s = isObj(d.settings) ? d.settings : fail('"settings" is missing')
   const theme = s.theme ?? DEFAULT_SETTINGS.theme
   if (theme !== 'system' && theme !== 'light' && theme !== 'dark') fail('settings: unknown theme')
@@ -125,6 +126,7 @@ function validateData(d: Obj): AllData {
     name: typeof s.name === 'string' ? s.name : DEFAULT_SETTINGS.name,
     theme,
     hideCompletedGoals: typeof s.hideCompletedGoals === 'boolean' ? s.hideCompletedGoals : DEFAULT_SETTINGS.hideCompletedGoals,
+    hideCompletedTodos: typeof s.hideCompletedTodos === 'boolean' ? s.hideCompletedTodos : DEFAULT_SETTINGS.hideCompletedTodos,
     doubleExposure: validateDoubleExposure(s.doubleExposure), // absent in v1 backups → defaults
   }
 
@@ -153,6 +155,20 @@ function validateData(d: Obj): AllData {
         completedAt: optStr(v, 'completedAt', w),
       }
     }),
+    todos: d.todos === undefined ? undefined : list(d, 'todos', validateTodo),
+  }
+}
+
+function validateTodo(v: Obj, w: string): Todo {
+  const dueDate = optStr(v, 'dueDate', w)
+  if (dueDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) fail(`${w}: "dueDate" should look like 2026-11-07`)
+  return {
+    id: str(v, 'id', w),
+    text: str(v, 'text', w),
+    dueDate,
+    completed: bool(v, 'completed', w),
+    createdAt: str(v, 'createdAt', w),
+    completedAt: optStr(v, 'completedAt', w),
   }
 }
 
