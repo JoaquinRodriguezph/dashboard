@@ -3,7 +3,10 @@ import { Dices, Download, ImagePlus, LoaderCircle, RotateCcw, X } from 'lucide-r
 import { buttonClass } from '../components/buttonStyles'
 import { MAX_PHOTOS, useExposure } from '../lib/exposure/ExposureContext'
 import { DEFAULT_DOUBLE_EXPOSURE } from '../storage'
-import type { DoubleExposureSettings as Params, ExposureColor, Photo } from '../types'
+import type { BackgroundSettings, DoubleExposureSettings as Params, ExposureColor, Photo } from '../types'
+import { Switch } from '../components/Switch'
+import { useSettings } from '../lib/settings'
+import { useReducedMotion } from '../lib/useReducedMotion'
 
 const COLORS: { id: ExposureColor; label: string }[] = [
   { id: 'natural', label: 'Natural' },
@@ -32,6 +35,10 @@ const SLIDERS: SliderConfig[] = [
 /** The "Double exposure" part of the settings dialog. */
 export function DoubleExposureSettings() {
   const { photos, imageUrl, status, error, settings, updateExposure, reroll, addPhotos, removePhoto } = useExposure()
+  const { settings: allSettings, updateSettings } = useSettings()
+  const background = allSettings.background
+  const updateBackground = (patch: Partial<BackgroundSettings>) => updateSettings({ background: { ...background, ...patch } })
+  const reducedMotion = useReducedMotion()
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
@@ -61,26 +68,18 @@ export function DoubleExposureSettings() {
 
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-medium">Double exposure</h3>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted">
-          Show banner
-          <input
-            type="checkbox"
-            role="switch"
-            checked={settings.enabled}
-            onChange={(e) => updateExposure({ enabled: e.target.checked })}
-            className="peer sr-only"
-          />
-          <span
-            aria-hidden
-            className="relative h-6 w-10 rounded-full bg-line transition-colors peer-checked:bg-accent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent after:absolute after:top-1 after:left-1 after:size-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-4"
-          />
-        </label>
-      </div>
+      <h3 className="mb-1.5 text-sm font-medium">Double exposure background</h3>
       <p className="mb-3 text-sm text-muted">
-        Your photos, layered like film exposed twice. Made on this device with pixel math; nothing is uploaded.
+        Your photos, layered like film exposed twice, as the page background. Made on this device with pixel math;
+        nothing is uploaded.
       </p>
+      <div className="mb-3">
+        <Switch
+          label="Use as page background"
+          checked={settings.enabled}
+          onChange={(enabled) => updateExposure({ enabled })}
+        />
+      </div>
 
       {/* Photos */}
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
@@ -107,11 +106,12 @@ export function DoubleExposureSettings() {
         <>
           {/* Preview + actions */}
           <div className="relative mt-4 aspect-[3/2] overflow-hidden rounded-xl border border-line bg-surface-hover">
+            {/* The very same image (same file, no filters) as the page background. */}
             {imageUrl && <img src={imageUrl} alt="Double exposure preview" className="size-full object-cover" />}
             {(generating || !imageUrl) && (
               <div className="absolute inset-0 flex items-center justify-center gap-2 bg-bg/40 text-sm backdrop-blur-[2px]">
                 {generating && <LoaderCircle size={16} className="animate-spin motion-reduce:animate-none" />}
-                {generating ? 'Developing…' : settings.enabled ? '' : 'Turn on "Show banner" to develop'}
+                {generating ? 'Developing…' : settings.enabled ? '' : 'Turn on "Use as page background" to develop'}
               </div>
             )}
           </div>
@@ -181,6 +181,33 @@ export function DoubleExposureSettings() {
               <RotateCcw size={14} /> Reset sliders
             </button>
           </div>
+
+          {/* Background animation */}
+          <fieldset className="mt-5 space-y-3 border-t border-line pt-4">
+            <legend className="sr-only">Background animation</legend>
+            <p className="text-sm font-medium">Background animation</p>
+            {reducedMotion && (
+              <p className="text-xs text-muted">Your device asks for reduced motion, so these stay still.</p>
+            )}
+            <Switch
+              label="Slow pan and zoom"
+              hint="Drifts gently over about 50 seconds"
+              checked={background.panZoom}
+              onChange={(panZoom) => updateBackground({ panZoom })}
+            />
+            <Switch
+              label="Living film grain"
+              hint="A faint flicker of grain on top"
+              checked={background.grain}
+              onChange={(grain) => updateBackground({ grain })}
+            />
+            <Switch
+              label="Drifting light"
+              hint="A soft white glow moving slowly across"
+              checked={background.glow}
+              onChange={(glow) => updateBackground({ glow })}
+            />
+          </fieldset>
         </>
       )}
     </div>

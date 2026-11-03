@@ -16,6 +16,7 @@
 
 import { idbDelete, idbGet, idbGetAll, idbPut, idbReplaceAll } from './lib/idb'
 import type {
+  BackgroundSettings,
   AllData,
   Affirmation,
   Daily,
@@ -94,7 +95,7 @@ const nowIso = () => new Date().toISOString()
 // once at startup (App waits for it before showing any section).
 
 const SCHEMA_KEY = 'dash.schemaVersion'
-const CURRENT_SCHEMA = 4
+const CURRENT_SCHEMA = 5
 
 const MIGRATIONS: Record<number, () => void> = {
   // v1 → v2: settings gained `doubleExposure`. Fill in its defaults.
@@ -111,6 +112,11 @@ const MIGRATIONS: Record<number, () => void> = {
   // v3 → v4: double exposure gained a colour mode (default: natural).
   // The cached image regenerates by itself (ALGORITHM_VERSION changed).
   4: () => {
+    const stored = read<Partial<Settings> | null>(KEYS.settings, null)
+    if (stored) write(KEYS.settings, mergeSettings(stored))
+  },
+  // v4 → v5: the photo became the page background, with animation settings.
+  5: () => {
     const stored = read<Partial<Settings> | null>(KEYS.settings, null)
     if (stored) write(KEYS.settings, mergeSettings(stored))
   },
@@ -153,12 +159,20 @@ export const DEFAULT_DOUBLE_EXPOSURE: DoubleExposureSettings = {
   color: 'natural',
 }
 
+export const DEFAULT_BACKGROUND: BackgroundSettings = {
+  panZoom: true,
+  grain: true,
+  glow: false,
+  live: false,
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   name: '',
   theme: 'system',
   hideCompletedGoals: false,
   hideCompletedTodos: false,
   doubleExposure: DEFAULT_DOUBLE_EXPOSURE,
+  background: DEFAULT_BACKGROUND,
 }
 
 /** Fills in any missing fields with defaults, including nested ones. */
@@ -167,6 +181,7 @@ function mergeSettings(stored: Partial<Settings>): Settings {
     ...DEFAULT_SETTINGS,
     ...stored,
     doubleExposure: { ...DEFAULT_DOUBLE_EXPOSURE, ...stored.doubleExposure },
+    background: { ...DEFAULT_BACKGROUND, ...stored.background },
   }
 }
 

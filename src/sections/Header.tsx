@@ -1,9 +1,8 @@
-import { Monitor, Moon, Settings as SettingsIcon, Sun } from 'lucide-react'
+import { Dices, LoaderCircle, Monitor, Moon, Settings as SettingsIcon, Sun } from 'lucide-react'
 import { useExposure } from '../lib/exposure/ExposureContext'
 import { useNow } from '../lib/useNow'
 import { useSettings } from '../lib/settings'
 import type { ThemePreference } from '../types'
-import { ExposureBanner } from './ExposureBanner'
 import { SundayGoalChip } from './SundayGoalChip'
 
 const NEXT_THEME: Record<ThemePreference, ThemePreference> = {
@@ -38,24 +37,20 @@ export function Header({ onOpenSettings }: HeaderProps) {
     year: 'numeric',
   })
 
-  // With photos, the header becomes a banner: the double exposure sits behind
-  // the greeting. Without, it's the plain header from before.
-  const { settings: exposure, photos } = useExposure()
-  const banner = exposure.enabled && photos.length > 0
-  const iconButton = `rounded-full p-2.5 text-muted transition duration-150 hover:bg-surface-hover hover:text-fg active:scale-90 motion-reduce:transition-none ${
-    banner ? 'bg-surface/60 backdrop-blur-md' : ''
+  // With the photo background on, the buttons get a frosted backing so they stay
+  // visible on any photo, and a re-roll button appears.
+  const { settings: exposure, photos, status, reroll } = useExposure()
+  const photoBackground = exposure.enabled && photos.length > 0
+  const generating = status === 'generating'
+  const iconButton = `inline-flex items-center justify-center rounded-full p-2.5 text-muted transition duration-150 hover:bg-surface-hover hover:text-fg active:scale-90 disabled:opacity-60 motion-reduce:transition-none ${
+    photoBackground ? 'bg-surface/70 backdrop-blur-xl' : ''
   }`
 
   return (
-    <header className={banner ? 'relative my-4 overflow-hidden rounded-3xl border border-line shadow-sm sm:my-6' : ''}>
-      {banner && <ExposureBanner />}
-      <div
-        className={`relative flex items-start justify-between gap-4 ${
-          banner ? 'min-h-36 px-5 pt-5 pb-14 sm:min-h-52 sm:px-8 sm:py-9' : 'py-6 sm:py-10'
-        }`}
-      >
+    <header>
+      <div className="flex items-start justify-between gap-4 py-6 sm:py-10">
         <div>
-          <p className="text-sm text-muted">{dateLabel}</p>
+          <p className="text-sm">{dateLabel}</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-4xl">
             {greetingFor(now.getHours())}
             {name && `, ${name}`}
@@ -63,6 +58,18 @@ export function Header({ onOpenSettings }: HeaderProps) {
           <SundayGoalChip />
         </div>
         <div className="flex shrink-0 gap-1">
+          {photoBackground && (
+            <button
+              type="button"
+              onClick={reroll}
+              disabled={generating}
+              className={iconButton}
+              aria-label={generating ? 'Developing double exposure…' : 'Re-roll background photo'}
+              title="Re-roll background"
+            >
+              {generating ? <LoaderCircle size={20} className="animate-spin motion-reduce:animate-none" /> : <Dices size={20} />}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => updateSettings({ theme: NEXT_THEME[settings.theme] })}

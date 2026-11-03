@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react'
 import { animated, Globals, useTrail } from '@react-spring/web'
-import { ErrorBoundary } from './components/ErrorBoundary'
+import { PageBackground } from './components/PageBackground'
 import { ExposureProvider } from './lib/exposure/ExposureContext'
 import { useReducedMotion } from './lib/useReducedMotion'
 import { useSettings } from './lib/settings'
@@ -8,39 +8,32 @@ import { useTheme } from './lib/useTheme'
 import { Header } from './sections/Header'
 import { ROWS, SECTIONS } from './sections'
 
-// lazy() puts the 3D scene (and all of three.js) in a separate file that is
-// only downloaded when <Background3D> is first rendered.
-const Background3D = lazy(() => import('./three/Background3D'))
 // The settings dialog (photo upload, sliders, backup) is only needed once you
 // open it, so it's downloaded on first open instead of at startup.
 const SettingsPanel = lazy(() => import('./settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })))
-
-/** Becomes true once the browser is idle after the first paint. */
-function useIdle(): boolean {
-  const [idle, setIdle] = useState(false)
-  useEffect(() => {
-    if ('requestIdleCallback' in window) {
-      const id = window.requestIdleCallback(() => setIdle(true), { timeout: 2000 })
-      return () => window.cancelIdleCallback(id)
-    }
-    const id = setTimeout(() => setIdle(true), 300)
-    return () => clearTimeout(id)
-  }, [])
-  return idle
-}
 
 export default function App() {
   const { settings, loaded } = useSettings()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsLoaded, setSettingsLoaded] = useState(false) // true after the first open
-  const isDark = useTheme(settings.theme)
+  useTheme(settings.theme)
   const reducedMotion = useReducedMotion()
-  const idle = useIdle()
 
-  // One switch for every React Spring animation in the app (UI and 3D).
+  // One switch for every React Spring animation in the app.
   useEffect(() => {
     Globals.assign({ skipAnimation: reducedMotion })
   }, [reducedMotion])
+
+  // <html data-hidden="true"> while the tab is in the background: the CSS
+  // pauses every background animation then (see .bg-anim in index.css).
+  useEffect(() => {
+    const update = () => {
+      document.documentElement.dataset.hidden = String(document.hidden)
+    }
+    update()
+    document.addEventListener('visibilitychange', update)
+    return () => document.removeEventListener('visibilitychange', update)
+  }, [])
 
   // Settings come from storage asynchronously; wait one tick so the greeting
   // doesn't flash without your name.
@@ -49,13 +42,7 @@ export default function App() {
   return (
     // Inside `loaded`, so the double exposure never starts from default settings.
     <ExposureProvider>
-      {idle && (
-        <ErrorBoundary>
-          <Suspense fallback={null}>
-            <Background3D dark={isDark} reducedMotion={reducedMotion} />
-          </Suspense>
-        </ErrorBoundary>
-      )}
+      <PageBackground reducedMotion={reducedMotion} />
 
       <div className="mx-auto max-w-2xl px-4 pb-16 sm:px-6 lg:max-w-[1600px] lg:px-8">
         <Header

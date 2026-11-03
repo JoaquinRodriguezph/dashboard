@@ -11,6 +11,19 @@ export interface Settings {
   hideCompletedGoals: boolean
   hideCompletedTodos: boolean
   doubleExposure: DoubleExposureSettings
+  background: BackgroundSettings
+}
+
+/** Animations on the full-page photo background. All are skipped with "reduce motion". */
+export interface BackgroundSettings {
+  /** Very slow pan and zoom (~50 s cycle). */
+  panZoom: boolean
+  /** Faint flickering film grain on top. */
+  grain: boolean
+  /** A soft white glow drifting across. */
+  glow: boolean
+  /** Real-time WebGL blend of the photos (lazy-loaded). */
+  live: boolean
 }
 
 /** A one-off task. `dueDate` is the day it should be finished by (local date). */

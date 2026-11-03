@@ -1,6 +1,6 @@
-import { DEFAULT_DOUBLE_EXPOSURE, DEFAULT_SETTINGS, exportAll, getPhotos } from '../storage'
+import { DEFAULT_BACKGROUND, DEFAULT_DOUBLE_EXPOSURE, DEFAULT_SETTINGS, exportAll, getPhotos } from '../storage'
 import { toDateKey } from './dates'
-import type { DoubleExposureSettings, ImportData, Photo, Settings, Todo } from '../types'
+import type { BackgroundSettings, DoubleExposureSettings, ImportData, Photo, Settings, Todo } from '../types'
 
 // A backup file looks like:
 //   { "app": "personal-dashboard", "version": 2, "exportedAt": "...",
@@ -119,6 +119,12 @@ function validateDoubleExposure(raw: unknown): DoubleExposureSettings {
   }
 }
 
+function validateBackground(raw: unknown): BackgroundSettings {
+  const b = isObj(raw) ? raw : {}
+  const flag = (key: keyof BackgroundSettings) => (typeof b[key] === 'boolean' ? (b[key] as boolean) : DEFAULT_BACKGROUND[key])
+  return { panZoom: flag('panZoom'), grain: flag('grain'), glow: flag('glow'), live: flag('live') }
+}
+
 function validateData(d: Obj): ImportData {
   const s = isObj(d.settings) ? d.settings : fail('"settings" is missing')
   const theme = s.theme ?? DEFAULT_SETTINGS.theme
@@ -129,6 +135,7 @@ function validateData(d: Obj): ImportData {
     hideCompletedGoals: typeof s.hideCompletedGoals === 'boolean' ? s.hideCompletedGoals : DEFAULT_SETTINGS.hideCompletedGoals,
     hideCompletedTodos: typeof s.hideCompletedTodos === 'boolean' ? s.hideCompletedTodos : DEFAULT_SETTINGS.hideCompletedTodos,
     doubleExposure: validateDoubleExposure(s.doubleExposure), // absent in v1 backups → defaults
+    background: validateBackground(s.background), // absent before v3 → defaults
   }
 
   const c = isObj(d.dailyChecks) ? d.dailyChecks : { date: '', doneIds: [] }

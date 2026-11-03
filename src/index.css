@@ -8,29 +8,35 @@
    raw colors, so a redesign only needs to change the values here. */
 :root {
   --bg: oklch(0.975 0.006 240);
-  --surface: oklch(1 0 0 / 0.8);
+  --surface: oklch(1 0 0 / 0.88);
   --surface-hover: oklch(0.96 0.008 240);
   --fg: oklch(0.26 0.02 255);
-  --muted: oklch(0.55 0.02 255);
+  --muted: oklch(0.49 0.02 255);
   --line: oklch(0.9 0.01 250);
   --accent: oklch(0.56 0.1 190);
   --accent-fg: oklch(0.99 0 0);
   --accent-soft: oklch(0.56 0.1 190 / 0.12);
-  --danger: oklch(0.58 0.19 25);
+  --danger: oklch(0.47 0.18 25);
+  /* Neutral layer over the photo background: pure white, no colour cast. */
+  --scrim: rgb(255 255 255 / 0.58);
+  --scrim-strong: rgb(255 255 255 / 0.8); /* behind the greeting at the top */
   color-scheme: light;
 }
 
 .dark {
   --bg: oklch(0.18 0.015 255);
-  --surface: oklch(0.23 0.018 255 / 0.8);
+  --surface: oklch(0.23 0.018 255 / 0.88);
   --surface-hover: oklch(0.27 0.02 255);
   --fg: oklch(0.93 0.01 250);
-  --muted: oklch(0.68 0.02 250);
+  --muted: oklch(0.75 0.02 250);
   --line: oklch(0.32 0.02 255);
   --accent: oklch(0.75 0.11 190);
   --accent-fg: oklch(0.2 0.02 255);
   --accent-soft: oklch(0.75 0.11 190 / 0.15);
-  --danger: oklch(0.7 0.17 25);
+  --danger: oklch(0.75 0.16 25);
+  /* Pure black in dark mode. */
+  --scrim: rgb(0 0 0 / 0.58);
+  --scrim-strong: rgb(0 0 0 / 0.8);
   color-scheme: dark;
 }
 
@@ -48,7 +54,7 @@
 }
 
 /* The page background lives on <html> only. If <body> had one too, it would be
-   painted on top of the 3D canvas (which sits behind content with z-index -10). */
+   painted on top of the background layer (which sits behind content with z-index -10). */
 html {
   background: var(--bg);
   color: var(--fg);
@@ -76,5 +82,81 @@ body {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ── Page background (components/PageBackground.tsx) ─────────────────────────
+   Layers, bottom to top: calm gradient → photo → drifting glow → neutral scrim
+   → film grain. Every animation here only changes `transform` or `opacity`,
+   which the GPU compositor handles without repainting the page. */
+
+/* Shown when there's no photo: a quiet wash of the accent colour on the page colour. */
+.bg-calm {
+  background:
+    radial-gradient(70vmax 50vmax at 0% 0%, var(--accent-soft), transparent 70%),
+    radial-gradient(60vmax 45vmax at 100% 100%, color-mix(in oklab, var(--accent) 7%, transparent), transparent 70%),
+    var(--bg);
+}
+
+/* Very slow pan and zoom. Starts zoomed in a little so the edges never show. */
+@keyframes bg-pan-zoom {
+  0%, 100% { transform: scale(1.08) translate(-1.5%, -1%); }
+  50% { transform: scale(1.15) translate(1.5%, 1%); }
+}
+.bg-pan-zoom {
+  animation: bg-pan-zoom 50s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Soft white light drifting across (40 s there and back). */
+@keyframes bg-glow-drift {
+  0% { transform: translate(-30vw, -10vh); }
+  100% { transform: translate(60vw, 40vh); }
+}
+.bg-glow {
+  position: absolute;
+  top: -20vmax;
+  left: -20vmax;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.32), transparent 65%);
+  animation: bg-glow-drift 40s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* Living grain: a noise tile that jumps to a new offset 8 times a second
+   (steps() = jumps, not slides). The layer is twice the screen size so there's
+   always noise to show whichever way it moves. */
+@keyframes bg-grain-jitter {
+  0% { transform: translate(0, 0); }
+  12.5% { transform: translate(-7%, 4%); }
+  25% { transform: translate(5%, -6%); }
+  37.5% { transform: translate(-3%, -9%); }
+  50% { transform: translate(8%, 3%); }
+  62.5% { transform: translate(-9%, 7%); }
+  75% { transform: translate(2%, 9%); }
+  87.5% { transform: translate(6%, -3%); }
+}
+.bg-grain {
+  position: absolute;
+  inset: -50%;
+  background-repeat: repeat;
+  opacity: 0.9;
+}
+.bg-grain.bg-anim {
+  animation: bg-grain-jitter 1s steps(1) infinite;
+}
+
+/* Hidden tab → pause every background animation (App sets data-hidden). */
+html[data-hidden="true"] .bg-anim {
+  animation-play-state: paused;
+}
+
+/* Reduce motion → no background animation at all. (The safety net above only
+   shortens animations; an infinite one must be switched off explicitly.) */
+@media (prefers-reduced-motion: reduce) {
+  .bg-anim {
+    animation: none !important;
   }
 }

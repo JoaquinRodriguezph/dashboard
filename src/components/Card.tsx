@@ -37,7 +37,7 @@ export function Card({ title, meta, leading, actions, variant = 'default', id, c
     <section
       id={id}
       aria-label={title}
-      className={`scroll-mt-6 rounded-2xl border backdrop-blur-md ${INTERACTIVE} ${VARIANT_CLASS[variant]} ${className}`}
+      className={`scroll-mt-6 rounded-2xl border backdrop-blur-xl ${INTERACTIVE} ${VARIANT_CLASS[variant]} ${className}`}
     >
       <div className={`flex min-h-9 items-center justify-between gap-3 ${featured ? 'mb-5' : 'mb-3'}`}>
         <div className="flex min-w-0 items-center gap-4">
