@@ -33,15 +33,6 @@ export function Affirmations() {
   // Hashing the date gives the same pick all day, and a different one tomorrow.
   const shown = items.length > 0 ? items[(hashString(today) + offset) % items.length] : undefined
 
-  const transitions = useTransition(shown ? [shown] : [], {
-    keys: (a) => a.id,
-    initial: null, // today's affirmation is simply there on load; only changes animate
-    from: { opacity: 0, y: 8 },
-    enter: { opacity: 1, y: 0 },
-    leave: { opacity: 0, y: -8 },
-    config: { tension: 320, friction: 30 }, // ≈ 300 ms
-  })
-
   const handleDelete = async (a: Affirmation) => {
     if (!window.confirm('Delete this affirmation?')) return
     setItems(await deleteAffirmation(a.id))
@@ -75,17 +66,7 @@ export function Affirmations() {
     >
       {!managing ? (
         shown ? (
-          <div className="grid">
-            {/* Old and new quote share one grid cell, so they cross-fade in place. */}
-            {transitions((style, item) => (
-              <animated.blockquote
-                style={style}
-                className="col-start-1 row-start-1 py-2 text-xl leading-relaxed font-medium text-balance sm:text-2xl"
-              >
-                “{item.text}”
-              </animated.blockquote>
-            ))}
-          </div>
+          <Quote affirmation={shown} />
         ) : (
           <p className="py-2 text-sm text-muted">
             Add affirmations with <strong>Manage</strong>. One will be shown each day.
@@ -142,5 +123,36 @@ export function Affirmations() {
         </div>
       )}
     </Card>
+  )
+}
+
+/**
+ * The quote, cross-fading when it changes. It's its own component so it's
+ * unmounted while you're in Manage: adding or deleting affirmations there changes
+ * which one is "today's" behind the scenes, and those changes shouldn't play as
+ * fades (they'd leave the animation out of step). Back from Manage, it simply
+ * shows the right quote (`initial: null` = no animation on mount).
+ */
+function Quote({ affirmation }: { affirmation: Affirmation }) {
+  const transitions = useTransition([affirmation], {
+    keys: (a) => a.id,
+    initial: null,
+    from: { opacity: 0, y: 8 },
+    enter: { opacity: 1, y: 0 },
+    leave: { opacity: 0, y: -8 },
+    config: { tension: 320, friction: 30 }, // ≈ 300 ms
+  })
+  return (
+    <div className="grid">
+      {/* Old and new quote share one grid cell, so they cross-fade in place. */}
+      {transitions((style, item) => (
+        <animated.blockquote
+          style={style}
+          className="col-start-1 row-start-1 py-2 text-xl leading-relaxed font-medium text-balance sm:text-2xl"
+        >
+          “{item.text}”
+        </animated.blockquote>
+      ))}
+    </div>
   )
 }

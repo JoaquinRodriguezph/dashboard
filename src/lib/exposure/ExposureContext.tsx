@@ -61,9 +61,12 @@ export function ExposureProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // Show a Blob as an <img>-able URL, freeing the previous one's memory.
+  // The old image is still fading out on the page background for a moment, so its
+  // URL is freed a little later, not straight away (that caused a failed load).
   const urlRef = useRef<string | null>(null)
   const showBlob = useCallback((blob: Blob | null) => {
-    if (urlRef.current) URL.revokeObjectURL(urlRef.current)
+    const old = urlRef.current
+    if (old) window.setTimeout(() => URL.revokeObjectURL(old), 2000)
     urlRef.current = blob ? URL.createObjectURL(blob) : null
     setImageUrl(urlRef.current)
   }, [])
