@@ -1,20 +1,24 @@
-import { useMemo, type ReactNode } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { animated, useTransition } from '@react-spring/web'
+import { ErrorBoundary } from './ErrorBoundary'
 import { useExposure } from '../lib/exposure/ExposureContext'
 import { grainTexture } from '../lib/grainTexture'
 import { useSettings } from '../lib/settings'
 
+// The live WebGL mode (and all of three.js) is only downloaded when it's switched on.
+const LiveExposure = lazy(() => import('../three/LiveExposure'))
+
 interface PageBackgroundProps {
   reducedMotion: boolean
-  /** Optional layer that replaces the still photo (the live WebGL mode). */
-  live?: ReactNode
 }
 
 /**
  * The fixed, full-screen background behind the whole page. Layers, bottom to top:
  *
  *   1. calm gradient       always (what you see with no photos or the feature off)
- *   2. photo               the cached double exposure, cover-fit (or the live layer)
+ *   2. photo               the cached double exposure, cover-fit
+ *   2b. live layer         optional WebGL version on top of the photo (the photo
+ *                          stays underneath while it loads, or if WebGL fails)
  *   3. drifting glow       optional, soft white light
  *   4. scrim               neutral white (light mode) / black (dark mode): 80% at the
  *                          top behind the greeting, 58% below, so text stays readable
@@ -24,16 +28,17 @@ interface PageBackgroundProps {
  * The photo itself is shown exactly as generated: no CSS filters or blend modes,
  * which is why it matches the preview in Settings.
  */
-export function PageBackground({ reducedMotion, live }: PageBackgroundProps) {
+export function PageBackground({ reducedMotion }: PageBackgroundProps) {
   const { imageUrl, settings: exposure, photos } = useExposure()
   const { settings } = useSettings()
   const bg = settings.background
   const showPhoto = exposure.enabled && photos.length > 0
   const animate = !reducedMotion
+  const live = showPhoto && bg.live && animate
   const grainUrl = useMemo(() => (showPhoto && bg.grain ? grainTexture() : null), [showPhoto, bg.grain])
 
   // Old and new image cross-fade (e.g. after a re-roll).
-  const transitions = useTransition(showPhoto && !live ? imageUrl : null, {
+  const transitions = useTransition(showPhoto ? imageUrl : null, {
     from: { opacity: 0 },
     enter: { opacity: 1 },
     leave: { opacity: 0 },
@@ -45,17 +50,24 @@ export function PageBackground({ reducedMotion, live }: PageBackgroundProps) {
       <div className="bg-calm absolute inset-0" />
       {showPhoto && (
         <>
-          {live}
           {transitions((style, url) =>
             url ? (
               <animated.div style={style} className="absolute inset-0">
                 <img
                   src={url}
                   alt=""
-                  className={`size-full object-cover ${bg.panZoom && animate ? 'bg-pan-zoom bg-anim' : ''}`}
+                  // No pan/zoom under the live layer: it would be hidden anyway.
+                  className={`size-full object-cover ${bg.panZoom && animate && !live ? 'bg-pan-zoom bg-anim' : ''}`}
                 />
               </animated.div>
             ) : null,
+          )}
+          {live && (
+            <ErrorBoundary>
+              <Suspense fallback={null}>
+                <LiveExposure photos={photos} settings={exposure} />
+              </Suspense>
+            </ErrorBoundary>
           )}
           {bg.glow && animate && <div className="bg-glow bg-anim" />}
           {/* Stronger at the top, where the greeting sits right on the photo; cards below have their own glass. */}

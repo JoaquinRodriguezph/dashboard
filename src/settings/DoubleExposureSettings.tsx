@@ -207,6 +207,12 @@ export function DoubleExposureSettings() {
               checked={background.glow}
               onChange={(glow) => updateBackground({ glow })}
             />
+            <Switch
+              label="Live double exposure"
+              hint="Your photos blend in real time and slowly drift past each other (WebGL). Uses more battery; the preview above shows the still version."
+              checked={background.live}
+              onChange={(live) => updateBackground({ live })}
+            />
           </fieldset>
         </>
       )}
