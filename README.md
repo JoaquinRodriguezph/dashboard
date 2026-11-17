@@ -4,11 +4,12 @@ My personal dashboard: a Chrome startup page and an installable Android app (PWA
 
 - **Dailies** (the main focus): a checklist that resets at local midnight, with a progress
   ring, optional links, **drag-to-reorder**, and a small celebration when everything's done
-- **To-Do:** one-off tasks with optional due dates, sorted overdue → today → upcoming
+- **To-Do:** one-off tasks with optional due dates, as a sorted **list** or a **month calendar**
 - **Weekly major goal:** one goal per Sunday-to-Saturday week, a Sunday reminder, a countdown, and history
-- **Words of affirmation:** a new one each day, plus a "show another" button
+- **Words of affirmation:** a new one each day in its own font, plus a "show another" button
 - **Goals:** short-term and life goals in two tabs
 - **Ideas:** things you could do, a "Pick one for me" button, and one-tap "send to To-Do"
+- To-Do, Goals and Ideas **fold into one-line summaries**, so Dailies stays the centrepiece
 - **Double exposure background:** your own photos combined like analog film exposed twice
   (pure pixel math, no AI), as the full-page background, with optional slow animation
 - Greeting with your name, light/dark/system theme, JSON backup export and import
@@ -99,15 +100,38 @@ and uses it the next time you open it.
 Laptop (≥ 1024px), up to 1600px wide
 ┌──────────── greeting · date · [🎲 re-roll] [theme] [⚙] ────────────┐
 ├─────────────┬──────────────────────────────┬────────────────────────┤
-│ Affirmation │                              │ To-Do                  │
+│ Affirmation │                              │ › To-Do  2 due today   │
 │ Weekly goal │      DAILIES (centre)        │                        │
 ├─────────────┴───────────────┬──────────────┴────────────────────────┤
-│ Goals  [Short-term | Life]  │ Ideas  [Pick one for me]              │
+│ › Goals  3 short-term · 5 life │ › Ideas  14 ideas                  │
 └─────────────────────────────┴────────────────────────────────────────┘
+(› = collapsed; tap a header to open it)
 
 Phone / tablet: one column
 greeting → Dailies → To-Do → Affirmation → Weekly goal → Goals → Ideas
 ```
+
+### Collapsible sections (`components/CollapsibleCard.tsx`)
+
+To-Do, Goals and Ideas fold into a one-line header so Dailies gets your attention. Dailies
+itself never folds.
+
+- **Click or tap the header** to open or close it; the chevron turns. While closed, the
+  header shows a summary: To-Do "2 due today · 1 overdue" (or "3 open" / "Nothing to do"),
+  Ideas "14 ideas", Goals "3 short-term · 5 life" (goals not yet completed).
+- **Remembered on this device**, like the theme. All three start closed. It's stored in
+  `localStorage` under `dash.device` (through `getDevicePrefs()`/`saveDevicePrefs()` in
+  storage.ts) and is **not** part of backups, so your phone and laptop can be laid out
+  differently and importing a backup never changes the layout.
+- **Accessible:** the header is a real `<button>` inside the `<h2>` with `aria-expanded`,
+  so Enter/Space and screen readers work, with a visible focus ring. Closed content is
+  `inert` (Tab skips it). The card's buttons (Clear completed, Pick one…) appear only while open.
+- **Animation:** height + fade (~250 ms) with React Spring, using a one-row grid that springs
+  between `0fr` and `1fr`, so the content never has to be measured. Off with reduce motion.
+- **Reusing it:** `const [open, toggle] = useCollapsible('ideas')` (from `lib/settings.tsx`), then
+  `<CollapsibleCard title="…" summary="…" open={open} onToggle={toggle}>…</CollapsibleCard>`.
+  A new collapsible section also needs its name added to `CollapsibleSection` in `types.ts`
+  and to `DEFAULT_DEVICE_PREFS` in storage.ts.
 
 - On Sundays without a weekly goal, a small **"Set this week's goal"** chip appears under the
   greeting. Tapping it scrolls to the weekly goal card and focuses its input. It's small on
@@ -126,8 +150,10 @@ greeting → Dailies → To-Do → Affirmation → Weekly goal → Goals → Ide
 
 ## The sections
 
-### To-Do (`sections/Todo.tsx`, logic in `lib/todos.ts`)
+### To-Do (`sections/todo/`, logic in `lib/todos.ts` and `lib/calendar.ts`)
 
+- **List | Calendar:** a toggle at the top switches views, remembered on this device. Both
+  views show the same tasks: one is added in the list, it's on the calendar too.
 - Add, edit, complete and **delete** tasks. Delete works on every task, completed ones too.
 - **Due date (optional):** the browser's own date picker (Android's calendar on the phone,
   Chrome's popup on a laptop) plus quick chips: *Today*, *Tomorrow*, *Next week* (the coming
@@ -138,6 +164,42 @@ greeting → Dailies → To-Do → Affirmation → Weekly goal → Goals → Ide
   year), "1 day overdue". A finished task just shows its date. Labels update by themselves at
   midnight.
 - The 👁 button hides completed tasks; **Clear completed** deletes them permanently (it asks first).
+
+#### Calendar view (`sections/todo/TodoCalendar.tsx`)
+
+```
+ ‹      November 2026      ›  [Today]
+  S   M   T   W   T   F   S
+  1   2   3   4   5   6   7
+  8   9  10  11  12  13  14
+          ∘
+ 15  16 [17] 18  19  20  21        15 = red: overdue, unfinished
+  •      ••          •             dots = open tasks (up to 3, "+" for more)
+ …                                 ∘ = only finished tasks that day
+─────────────────────────────
+ Tue, Nov 17 · Today
+  ○ Submit report        ✎ 🗑
+  ＋ Add task for Tue, Nov 17       (the due date is set to that day)
+─────────────────────────────
+ No date
+  ○ Buy groceries        ✎ 🗑
+```
+
+- **‹ ›** change month (a short slide; none with reduce motion), **Today** jumps back.
+  Today has an accent ring; the selected day is filled in.
+- **Tap or click a day** to see its tasks below, where you can add (the date is preset),
+  check off, edit (which can also move the date) and delete. Tasks without a date are in
+  the **No date** list underneath, so nothing disappears. *Hide completed* applies here too.
+- **Keyboard:** the selected day is the one Tab stop in the grid; **arrows** move by a day
+  or a week, **Page Up/Down** by a month. Screen readers hear e.g. "Sunday, November 15,
+  1 open task, overdue".
+- **How the grid is made** (`lib/calendar.ts`, no library): find the Sunday on or before
+  the 1st and list the next 42 days. Always 6 weeks, so the card doesn't change height from
+  month to month. Local time, weeks start on Sunday like the weekly goal.
+- **On a phone** the full month fits: each day is a ~45×44 px button, the recommended
+  minimum for fingers.
+- **Shared code:** both views use `TodoTaskList.tsx` for the rows, and `Todo.tsx` owns the
+  data and the actions (check, edit, delete, add) and hands them to whichever view is showing.
 
 ### Goals (`sections/Goals.tsx`)
 
@@ -162,6 +224,26 @@ A place to dump things you could do.
   drop (Esc cancels). Screen readers announce the task name and position.
 - The new order is saved straight away (`setDailyOrder` in storage.ts).
 - The ↑/↓ buttons in **Edit** mode still work too.
+
+### Words of affirmation: the font (`sections/Affirmations.tsx`)
+
+The affirmation has its own voice: **Playfair Display italic**, in **plum** (light mode,
+`oklch(0.42 0.09 350)`) or **dusty rose** (dark mode, `oklch(0.85 0.07 350)`). Both are
+tokens in `index.css` (`--affirmation`, used as `text-affirmation`), and the font is the
+Tailwind class `font-affirmation`.
+
+- **Bundled, not downloaded from Google Fonts,** so it works offline: the file comes from the
+  `@fontsource/playfair-display` package. Only the one style that's used is included:
+  italic, weight 400, Latin characters, as a single ~22 kB `.woff2`. It's declared with
+  one `@font-face` at the top of `index.css`, pointing straight at that file.
+- **Offline:** `woff2` is in the service worker's precache list (`vite.config.ts`), so the
+  installed app has the font with no internet.
+- `font-display: swap` shows the text immediately in a fallback serif (Georgia) and switches
+  when the font is ready. The text uses `font-normal` because only weight 400 is bundled; a
+  bolder weight would be faked by the browser.
+- **Readable on the photo background:** contrast measured at 8.0–10.6:1 (the minimum is 4.5)
+  over bright, dark and busy photos, in light and dark mode, on phone and laptop.
+- When it changes ("show another"), it cross-fades as before.
 
 ---
 
@@ -269,6 +351,7 @@ slider). The worker isn't even downloaded until it's needed.
 | What | Where | Why |
 |---|---|---|
 | Settings, dailies, to-dos, goals, ideas, affirmations, weekly goals | `localStorage` (keys `dash.v1.*`) | Small text data |
+| This device's layout: which sections are collapsed, To-Do list or calendar | `localStorage` (key `dash.device`) | A display preference per device, like the theme. **Not in backups** |
 | Your photos (downscaled to ≤1600px JPEG, ~100–300 KB each) and the cached double exposure | `IndexedDB` (database `dashboard`) | Binary images are too big for localStorage (~5 MB limit) |
 
 Both are **per browser, per device**:
@@ -341,6 +424,7 @@ src/
 ├─ lib/
 │  ├─ dates.ts            Local-time date helpers (weeks start Sunday)
 │  ├─ todos.ts            Due-date status, friendly labels, sorting, quick dates
+│  ├─ calendar.ts         Month grid (6 weeks from Sunday), task counts per day
 │  ├─ useToday.ts         Today's date; re-renders at midnight and when the tab wakes
 │  ├─ settings.tsx        Settings shared via React context (useSettings)
 │  ├─ useTheme.ts         Applies light/dark, follows the system in "system" mode
@@ -356,10 +440,12 @@ src/
 │     ├─ client.ts        renderDoubleExposure(): talks to the worker
 │     ├─ ExposureContext.tsx Photos + cached image + when to regenerate
 │     └─ random.ts        Seeded random numbers (reproducible results)
-├─ components/            Reusable UI: Card, TextForm, DateField, CheckButton, IconButton,
-│                         Tabs, Switch, ProgressRing, AnimatedList, StrikeText, Celebration,
-│                         buttonStyles, PageBackground (the full-page background layers)
+├─ components/            Reusable UI: Card, CollapsibleCard, TextForm, DateField, CheckButton,
+│                         IconButton, Tabs, Switch, ProgressRing, AnimatedList, StrikeText,
+│                         Celebration, buttonStyles, PageBackground (the full-page background)
 ├─ sections/              One file per dashboard section, plus index.ts (the registry)
+│  └─ todo/               To-Do: Todo.tsx (card + data), TodoTaskList.tsx (rows, shared by
+│                         both views), TodoCalendar.tsx (month view)
 │                         and the header pieces (Header, SundayGoalChip)
 ├─ settings/              The settings dialog (lazy-loaded) + DoubleExposureSettings
 └─ three/LiveExposure.tsx ★ The only WebGL code: live mode (lazy-loaded, off by default)
@@ -423,6 +509,9 @@ src/
 
 ## Changing the look
 
+- **Affirmation font and colour:** `--affirmation` (both themes) and `--font-affirmation` in
+  `src/index.css`. For another @fontsource font, install it, point the `@font-face` at its
+  `latin-…-italic.woff2` file, and update the font name.
 - **Colors:** edit the CSS variables in `src/index.css` (`:root` for light, `.dark` for dark).
   Components use names like `bg-surface` and `text-muted`, never raw colors. `--scrim` and
   `--scrim-strong` control how much the photo background is dimmed behind the content.
