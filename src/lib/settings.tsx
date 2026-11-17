@@ -71,6 +71,13 @@ export function useSettings(): SettingsContextValue {
   return ctx
 }
 
+/** To-Do's list or calendar view, remembered on this device. */
+export function useTodoView(): [view: DevicePrefs['todoView'], setView: (v: DevicePrefs['todoView']) => void] {
+  const { devicePrefs, updateDevicePrefs } = useSettings()
+  const setView = useCallback((todoView: DevicePrefs['todoView']) => updateDevicePrefs((p) => ({ ...p, todoView })), [updateDevicePrefs])
+  return [devicePrefs.todoView, setView]
+}
+
 /** Whether a section is open on this device, and a function to open/close it. Remembered per device. */
 export function useCollapsible(section: 'todo' | 'ideas' | 'goals'): [open: boolean, toggle: () => void] {
   const { devicePrefs, updateDevicePrefs } = useSettings()

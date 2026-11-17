@@ -3,7 +3,7 @@ import { Affirmations } from './Affirmations'
 import { Dailies } from './Dailies'
 import { Goals } from './Goals'
 import { Ideas } from './Ideas'
-import { Todo } from './Todo'
+import { Todo } from './todo/Todo'
 import { WeeklyGoal } from './WeeklyGoal'
 
 // ─────────────────────────────────────────────────────────────────────────────

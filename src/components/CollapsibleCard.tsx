@@ -5,7 +5,7 @@ import { cardClass } from './Card'
 
 interface CollapsibleCardProps {
   title: string
-  /** Short info next to the title, shown open or closed, e.g. "2 due today · 1 overdue". */
+  /** Short info next to the title while closed, e.g. "2 due today · 1 overdue". */
   summary?: ReactNode
   /** Buttons at the top right. Only shown while open, so closed cards stay quiet. */
   actions?: ReactNode
@@ -52,7 +52,8 @@ export function CollapsibleCard({ title, summary, actions, open, onToggle, child
               className={`shrink-0 text-muted transition-transform duration-250 motion-reduce:transition-none ${open ? 'rotate-90' : ''}`}
             />
             <span className="shrink-0 text-base font-semibold">{title}</span>
-            {summary && <span className="min-w-0 truncate text-sm font-normal text-muted">{summary}</span>}
+            {/* Only while closed: open, the details are right below (and the actions need the room). */}
+            {summary && !open && <span className="min-w-0 truncate text-sm font-normal text-muted">{summary}</span>}
           </button>
         </h2>
         {open && actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
