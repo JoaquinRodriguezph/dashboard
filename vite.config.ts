@@ -35,8 +35,8 @@ export default defineConfig({
       },
       workbox: {
         // Precache everything the app needs so it works fully offline,
-        // including the lazy-loaded 3D chunk.
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+        // including the lazy-loaded live-mode (three.js) chunk and the bundled font.
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,woff2}'],
         // The default limit is 2 MiB per file. The three.js chunk is ~0.9 MB today;
         // 5 MiB leaves room for richer 3D in the redesign.
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,

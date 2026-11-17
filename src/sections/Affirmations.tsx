@@ -148,7 +148,9 @@ function Quote({ affirmation }: { affirmation: Affirmation }) {
       {transitions((style, item) => (
         <animated.blockquote
           style={style}
-          className="col-start-1 row-start-1 py-2 text-xl leading-relaxed font-medium text-balance sm:text-2xl"
+          // Its own voice: Playfair Display italic in plum (light) / dusty rose (dark).
+          // font-normal on purpose: only weight 400 is bundled, anything bolder would be faked.
+          className="col-start-1 row-start-1 py-2 font-affirmation text-[1.375rem] leading-snug font-normal text-balance text-affirmation italic sm:text-[1.6rem]"
         >
           “{item.text}”
         </animated.blockquote>

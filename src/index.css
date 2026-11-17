@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* The affirmation font, bundled with the app (from @fontsource) so it works
+   offline. Only the one style that's used: Playfair Display italic 400, Latin
+   characters only, woff2 only (~22 kB). font-display: swap shows the text right
+   away in a fallback serif and switches when the font has loaded. */
+@font-face {
+  font-family: "Playfair Display";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("@fontsource/playfair-display/files/playfair-display-latin-400-italic.woff2") format("woff2");
+}
+
 /* Make Tailwind's `dark:` prefix follow a `.dark` class on <html> (set by useTheme)
    instead of the OS setting directly, so the in-app toggle can override it. */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -17,6 +29,8 @@
   --accent-fg: oklch(0.99 0 0);
   --accent-soft: oklch(0.56 0.1 190 / 0.12);
   --danger: oklch(0.47 0.18 25);
+  /* The affirmation: a calm plum. */
+  --affirmation: oklch(0.42 0.09 350);
   /* Neutral layer over the photo background: pure white, no colour cast. */
   --scrim: rgb(255 255 255 / 0.58);
   --scrim-strong: rgb(255 255 255 / 0.8); /* behind the greeting at the top */
@@ -34,13 +48,21 @@
   --accent-fg: oklch(0.2 0.02 255);
   --accent-soft: oklch(0.75 0.11 190 / 0.15);
   --danger: oklch(0.75 0.16 25);
+  /* Dusty rose: the same hue as the light-mode plum, light enough for dark cards. */
+  --affirmation: oklch(0.85 0.07 350);
   /* Pure black in dark mode. */
   --scrim: rgb(0 0 0 / 0.58);
   --scrim-strong: rgb(0 0 0 / 0.8);
   color-scheme: dark;
 }
 
+/* Tailwind class `font-affirmation`. Georgia / any serif is the fallback while the font loads. */
+@theme {
+  --font-affirmation: "Playfair Display", Georgia, "Times New Roman", serif;
+}
+
 @theme inline {
+  --color-affirmation: var(--affirmation);
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-hover: var(--surface-hover);
