@@ -14,6 +14,19 @@ export interface Settings {
   background: BackgroundSettings
 }
 
+/** Sections that can be collapsed into a one-line header. */
+export type CollapsibleSection = 'todo' | 'ideas' | 'goals'
+
+/**
+ * Display preferences for THIS device only (like the theme). Not part of
+ * backups: your phone and laptop can each have their own layout.
+ */
+export interface DevicePrefs {
+  /** true = collapsed. */
+  collapsed: Record<CollapsibleSection, boolean>
+  todoView: 'list' | 'calendar'
+}
+
 /** Animations on the full-page photo background. All are skipped with "reduce motion". */
 export interface BackgroundSettings {
   /** Very slow pan and zoom (~50 s cycle). */

@@ -30,15 +30,16 @@ const VARIANT_CLASS = {
     'border-accent/40 bg-surface bg-linear-to-b from-accent-soft to-transparent to-40% p-5 shadow-lg shadow-accent/10 ring-1 ring-accent/10 hover:border-accent/70 hover:shadow-accent/20 sm:p-7',
 }
 
+/** The glass box styling, shared with CollapsibleCard so both always look the same. */
+export function cardClass(variant: 'default' | 'featured' = 'default'): string {
+  return `scroll-mt-6 rounded-2xl border backdrop-blur-xl ${INTERACTIVE} ${VARIANT_CLASS[variant]}`
+}
+
 /** The box every section lives in. */
 export function Card({ title, meta, leading, actions, variant = 'default', id, className = '', children }: CardProps) {
   const featured = variant === 'featured'
   return (
-    <section
-      id={id}
-      aria-label={title}
-      className={`scroll-mt-6 rounded-2xl border backdrop-blur-xl ${INTERACTIVE} ${VARIANT_CLASS[variant]} ${className}`}
-    >
+    <section id={id} aria-label={title} className={`${cardClass(variant)} ${className}`}>
       <div className={`flex min-h-9 items-center justify-between gap-3 ${featured ? 'mb-5' : 'mb-3'}`}>
         <div className="flex min-w-0 items-center gap-4">
           {leading}

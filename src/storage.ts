@@ -22,6 +22,7 @@ import type {
   Daily,
   DailyChecks,
   DateKey,
+  DevicePrefs,
   DoubleExposureSettings,
   ExposureResult,
   Goal,
@@ -197,6 +198,40 @@ export async function saveSettings(settings: Settings): Promise<void> {
     localStorage.setItem('dash.themeCache', settings.theme)
   } catch {
     /* storage full or blocked; not critical */
+  }
+}
+
+// ── Device preferences ───────────────────────────────────────────────────────
+// Per-device display choices (which sections are collapsed, To-Do list or
+// calendar). Stored under their own key, outside "dash.v1.*", and NOT part of
+// exportAll()/importAll(): a backup moved to another device doesn't change
+// how that device's page looks. Even with Supabase, this would stay local.
+
+const DEVICE_KEY = 'dash.device'
+
+export const DEFAULT_DEVICE_PREFS: DevicePrefs = {
+  collapsed: { todo: true, ideas: true, goals: true },
+  todoView: 'list',
+}
+
+export async function getDevicePrefs(): Promise<DevicePrefs> {
+  try {
+    const stored = JSON.parse(localStorage.getItem(DEVICE_KEY) ?? '{}') as Partial<DevicePrefs>
+    return {
+      ...DEFAULT_DEVICE_PREFS,
+      ...stored,
+      collapsed: { ...DEFAULT_DEVICE_PREFS.collapsed, ...stored.collapsed },
+    }
+  } catch {
+    return DEFAULT_DEVICE_PREFS
+  }
+}
+
+export async function saveDevicePrefs(prefs: DevicePrefs): Promise<void> {
+  try {
+    localStorage.setItem(DEVICE_KEY, JSON.stringify(prefs))
+  } catch {
+    /* storage full or blocked: the layout just won't be remembered */
   }
 }
 

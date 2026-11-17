@@ -3,9 +3,10 @@ import { animated, useSpring } from '@react-spring/web'
 import { Check, ListPlus, Pencil, Plus, Shuffle, Trash2 } from 'lucide-react'
 import { AnimatedList } from '../components/AnimatedList'
 import { buttonClass } from '../components/buttonStyles'
-import { Card } from '../components/Card'
+import { CollapsibleCard } from '../components/CollapsibleCard'
 import { IconButton } from '../components/IconButton'
 import { TextForm } from '../components/TextForm'
+import { useCollapsible } from '../lib/settings'
 import { useReducedMotion } from '../lib/useReducedMotion'
 import { addIdea, deleteIdea, getIdeas, ideaToTodo, updateIdeaText } from '../storage'
 import type { Idea } from '../types'
@@ -13,6 +14,7 @@ import type { Idea } from '../types'
 type Highlight = 'none' | 'rolling' | 'picked'
 
 export function Ideas() {
+  const [open, toggle] = useCollapsible('ideas')
   const reducedMotion = useReducedMotion()
   const [ideas, setIdeas] = useState<Idea[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -71,9 +73,15 @@ export function Ideas() {
   const unused = ideas.filter((i) => !i.todoId).length
 
   return (
-    <Card
+    <CollapsibleCard
       title="Ideas"
-      meta={ideas.length > 0 && `${unused} to try`}
+      open={open}
+      onToggle={toggle}
+      summary={
+        ideas.length === 0
+          ? 'No ideas yet'
+          : `${ideas.length} idea${ideas.length === 1 ? '' : 's'}${unused < ideas.length ? ` · ${unused} to try` : ''}`
+      }
       actions={
         ideas.length > 0 && (
           <button type="button" onClick={pickOne} className={buttonClass('outline')}>
@@ -148,7 +156,7 @@ export function Ideas() {
           </button>
         )}
       </div>
-    </Card>
+    </CollapsibleCard>
   )
 }
 

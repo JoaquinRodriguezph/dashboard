@@ -3,12 +3,12 @@ import { animated, useSpring } from '@react-spring/web'
 import { Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react'
 import { AnimatedList } from '../components/AnimatedList'
 import { buttonClass } from '../components/buttonStyles'
-import { Card } from '../components/Card'
+import { CollapsibleCard } from '../components/CollapsibleCard'
 import { CheckButton } from '../components/CheckButton'
 import { IconButton } from '../components/IconButton'
 import { Tabs } from '../components/Tabs'
 import { TextForm } from '../components/TextForm'
-import { useSettings } from '../lib/settings'
+import { useCollapsible, useSettings } from '../lib/settings'
 import { addGoal, clearCompletedGoals, deleteGoal, getGoals, setGoalCompleted, updateGoalText } from '../storage'
 import type { Goal, GoalList } from '../types'
 
@@ -19,7 +19,15 @@ const TABS: { id: GoalList; label: string }[] = [
 
 const TAB_NOUN: Record<GoalList, string> = { short: 'short-term', life: 'life' }
 
+/** e.g. "3 short-term · 5 life", counting goals that aren't completed yet. */
+function goalsSummary(goals: Goal[]): string {
+  const open = (list: GoalList) => goals.filter((g) => g.list === list && !g.completed).length
+  if (goals.length === 0) return 'No goals yet'
+  return `${open('short')} short-term · ${open('life')} life`
+}
+
 export function Goals() {
+  const [open, toggle] = useCollapsible('goals')
   const { settings, updateSettings } = useSettings()
   const hideCompleted = settings.hideCompletedGoals
 
@@ -66,9 +74,11 @@ export function Goals() {
   if (!loaded) return null
 
   return (
-    <Card
+    <CollapsibleCard
       title="Goals"
-      meta={inList.length > 0 && `${completedCount}/${inList.length} done`}
+      open={open}
+      onToggle={toggle}
+      summary={goalsSummary(goals)}
       actions={
         <>
           <IconButton
@@ -155,6 +165,6 @@ export function Goals() {
           )}
         </div>
       </animated.div>
-    </Card>
+    </CollapsibleCard>
   )
 }

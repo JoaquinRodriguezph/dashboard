@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { CalendarDays, Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react'
 import { AnimatedList } from '../components/AnimatedList'
 import { buttonClass } from '../components/buttonStyles'
-import { Card } from '../components/Card'
+import { CollapsibleCard } from '../components/CollapsibleCard'
 import { CheckButton } from '../components/CheckButton'
 import { IconButton } from '../components/IconButton'
 import { TextForm, type TextField } from '../components/TextForm'
-import { useSettings } from '../lib/settings'
+import { useCollapsible, useSettings } from '../lib/settings'
 import { dueLabel, dueStatus, sortTodos, type DueStatus } from '../lib/todos'
 import { useToday } from '../lib/useToday'
 import {
@@ -43,7 +43,21 @@ const CHIP_CLASS: Record<DueStatus, string> = {
   none: '',
 }
 
+/** The header line: what matters today first, e.g. "2 due today · 1 overdue". */
+function todoSummary(open: number, dueToday: number, overdue: number): ReactNode {
+  if (open === 0) return 'Nothing to do'
+  if (dueToday === 0 && overdue === 0) return `${open} open`
+  return (
+    <>
+      {dueToday > 0 && `${dueToday} due today`}
+      {dueToday > 0 && overdue > 0 && ' · '}
+      {overdue > 0 && <span className="font-medium text-danger">{overdue} overdue</span>}
+    </>
+  )
+}
+
 export function Todo() {
+  const [open, toggle] = useCollapsible('todo')
   const today = useToday()
   const { settings, updateSettings } = useSettings()
   const hideCompleted = settings.hideCompletedTodos
@@ -69,6 +83,7 @@ export function Todo() {
   const completedCount = todos.filter((t) => t.completed).length
   const openCount = todos.length - completedCount
   const overdueCount = todos.filter((t) => !t.completed && dueStatus(t.dueDate, today) === 'overdue').length
+  const dueTodayCount = todos.filter((t) => !t.completed && dueStatus(t.dueDate, today) === 'today').length
 
   const save = (values: Record<string, string>) => ({ text: values.text, dueDate: values.dueDate || undefined })
 
@@ -85,16 +100,11 @@ export function Todo() {
   if (!loaded) return null
 
   return (
-    <Card
+    <CollapsibleCard
       title="To-Do"
-      meta={
-        todos.length > 0 && (
-          <>
-            {openCount} open
-            {overdueCount > 0 && <span className="font-medium text-danger"> · {overdueCount} overdue</span>}
-          </>
-        )
-      }
+      open={open}
+      onToggle={toggle}
+      summary={todoSummary(openCount, dueTodayCount, overdueCount)}
       actions={
         completedCount > 0 && (
           <>
@@ -191,6 +201,6 @@ export function Todo() {
           </button>
         )}
       </div>
-    </Card>
+    </CollapsibleCard>
   )
 }
