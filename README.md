@@ -2,8 +2,12 @@
 
 My personal dashboard: a Chrome startup page and an installable Android app (PWA).
 
-- **Dailies** (the main focus): a checklist that resets at local midnight, with a progress
-  ring, optional links, **drag-to-reorder**, and a small celebration when everything's done
+- **Dailies** (the main focus): a checklist that resets at local midnight, with optional
+  links and **drag-to-reorder**
+- **Points and a daily target:** every daily and task is worth points; today's score is a
+  ring next to Dailies ("45 / 60 pts") with a small celebration when you reach the target
+- **Statistics page:** a heatmap of your days, streaks, week/month totals and a 30-day chart,
+  from a history that saves every day
 - **To-Do:** one-off tasks with optional due dates, as a sorted **list** or a **month calendar**
 - **Weekly major goal:** one goal per Sunday-to-Saturday week, a Sunday reminder, a countdown, and history
 - **Words of affirmation:** a new one each day in its own font, plus a "show another" button
@@ -247,6 +251,83 @@ Tailwind class `font-affirmation`.
 
 ---
 
+## Points, the daily target, and history
+
+### Points and the daily target
+
+- **Every daily and every To-Do task has points** (a whole number from 0 to 999, default
+  10). Set them in the small **pts** box when you add or edit an item; each item shows a
+  "10 pts" badge.
+- **Scoring:**
+  - Ticking a daily adds its points to **today's score**; unticking takes them away.
+  - Completing a task adds its points to the score of **the day you complete it**,
+    whatever its due date. Un-completing it the same day takes them away.
+  - Un-completing a task you finished on an **earlier** day leaves that day as it was
+    (past days are final); the task simply becomes open again.
+- **Daily target** (Settings → Daily target): the score that makes it a good day. Next to the
+  box is a suggestion, 80% of your dailies' total rounded to 5 (`suggestTarget()` in
+  `lib/score.ts`), with a button to use it. Not 100%, so a good day doesn't require every
+  single thing; tasks can make up the rest.
+- **The ring next to Dailies** shows "score / target pts", counts up and down with a spring,
+  and under the title says e.g. "3 of 5 done · 15 pts to go". The moment you first reach the
+  target that day, the small burst plays, **once per day**: unticking and ticking again, or
+  reloading the page, won't replay it (the day remembers `reachedAt`). With reduce motion,
+  nothing animates.
+
+### How the history is saved (`src/storage.ts` → "Score history")
+
+- **One record per day with activity:** the date, every item you completed (its name,
+  whether it was a daily or a task, its points, and the time), the total score, the target
+  that applied that day, and whether you reached it.
+- **The record *is* the score.** Ticking a daily or completing a task adds an item to
+  **today's** record; unticking removes it. There's no separate number that could drift.
+- **Snapshots:** each item's name and points are *copied* into the record when you complete
+  it. Renaming, re-scoring or deleting an item later never changes a past day, and neither
+  does changing the target: only today's record follows the current target.
+- **Midnight:** only today's record is ever written, so when the date changes, yesterday's
+  record is final simply because nothing writes to it any more. Nothing has to run at
+  midnight, which is why it works the same whether the app stayed open overnight or was
+  closed for a week.
+- **Missed days** (no activity) aren't stored. `history.getRange()` fills them in with
+  score 0 when the statistics read them.
+- **History starts** the day this feature was installed (`historyStart`); days before it
+  don't count as missed, and older days can't be filled in.
+- **Reading it:** all through storage.ts:
+  - `history.getDay(date)`: one record, or null
+  - `history.getRange(from, to)`: one entry per day from the history start up to today,
+    missed days included
+  - `history.getStart()`
+
+### Statistics page (`#/stats`, `src/pages/StatsPage.tsx`)
+
+Open it with the **chart button** in the top-right of the header; **← Dashboard** (or your
+phone's back button) goes back.
+
+- **Current streak / best streak:** days in a row with the target reached. Today doesn't
+  break your streak until it's over: in the morning your streak still shows.
+- **This week / this month** (Sunday–today, 1st–today): days the target was reached
+  ("4 of 5 days"), average daily score (missed days count as 0), and total points.
+- **Activity heatmap:** one square per day, one column per week (Sunday at the top):
+  accent = target reached, light accent = some points, grey = missed, faint = before
+  history started. Today is outlined. On a phone it scrolls sideways and starts at today.
+  Arrow keys move between days.
+- **Last 30 days:** a bar per day (accent if the target was reached, grey if not) with the
+  target as a dashed line, which steps where you changed it.
+- **Day details:** tap a square or a bar to see that day's score vs target and the list of
+  what you completed, as it was then.
+
+How it's built:
+- **Routing:** the page is `#/stats`. The part after `#` never reaches a server, so
+  refreshing works on GitHub Pages and offline, and opening the page adds a history entry
+  so the phone's back button returns (`lib/useHashRoute.ts`).
+- **Lazy-loaded:** `React.lazy`, so its code (~5 kB) isn't part of the dashboard's startup;
+  it's precached for offline use.
+- **No chart library:** the heatmap is a CSS grid of buttons and the bar chart is plain SVG
+  drawn at its real width, so labels stay crisp on a phone. The maths (streaks, totals) is in
+  `lib/stats.ts` as plain functions.
+
+---
+
 ## Double exposure background
 
 Upload a few of your own photos in **Settings → Double exposure background** and the app
@@ -351,6 +432,7 @@ slider). The worker isn't even downloaded until it's needed.
 | What | Where | Why |
 |---|---|---|
 | Settings, dailies, to-dos, goals, ideas, affirmations, weekly goals | `localStorage` (keys `dash.v1.*`) | Small text data |
+| Score history (one record per active day) and the day it started | `localStorage` (keys `dash.v1.history`, `dash.v1.historyStart`) | About 1 kB per day: years fit easily |
 | This device's layout: which sections are collapsed, To-Do list or calendar | `localStorage` (key `dash.device`) | A display preference per device, like the theme. **Not in backups** |
 | Your photos (downscaled to ≤1600px JPEG, ~100–300 KB each) and the cached double exposure | `IndexedDB` (database `dashboard`) | Binary images are too big for localStorage (~5 MB limit) |
 
@@ -367,8 +449,10 @@ never go through it: they're read from IndexedDB and shown via `blob:` URLs.
 
 ### Backups
 
-- A backup (format version 3) contains everything: settings, dailies, to-dos, goals, ideas,
-  affirmations, weekly goals and, optionally, photos.
+- A backup (format version 4) contains everything: settings (including the daily target),
+  dailies and to-dos with their points, goals, ideas, affirmations, weekly goals, **the full
+  score history** and, optionally, photos. Every history record is checked on import and its
+  score recalculated from its items.
 - **"Include photos"** (on by default) puts your photos into the backup file as base64
   text. That makes the backup complete, so one file moves everything to a new phone.
   The downside is size: photos grow by about a third as text, so 10 photos make roughly a
@@ -377,8 +461,9 @@ never go through it: they're read from IndexedDB and shown via `blob:` URLs.
   decoding every photo. A wrong or broken file shows an error and changes nothing. A valid
   one asks for confirmation first and says what will happen:
   - a backup **with** photos replaces your current photos
-  - things an **older backup doesn't contain** (to-dos and ideas from before they existed,
-    or photos) are **kept** as they are now
+  - a backup **with** history replaces your current history
+  - things an **older backup doesn't contain** (to-dos, ideas or history from before they
+    existed, or photos) are **kept** as they are now; items without points get 10
 - The generated image isn't included in backups; it's re-created from the seed.
 
 ### Data migrations
@@ -393,6 +478,7 @@ each numbered step in `MIGRATIONS` that hasn't run yet:
 | 3 | To-Do (starts empty) and its "hide completed" setting |
 | 4 | double exposure colour mode (Natural) |
 | 5 | background animation settings |
+| 6 | points (every existing daily and task gets 10), the daily target (set to the suggestion), the history start date, and whatever was already done that day goes into its record |
 
 Your goals were never converted. They stay exactly as they were, just shown in the new
 bottom row.
@@ -401,7 +487,7 @@ bottom row.
 
 All reading and writing goes through **one file: `src/storage.ts`**. Every function there
 is `async` and returns plain data (`getDailies()`, `addTodo(…)`, `ideaToTodo(id, date)`,
-`setDailyChecked(today, id, checked)`, `getPhotos()`, `addPhoto(…)`, …). To move to Supabase,
+`setDailyChecked(today, id, checked)`, `history.getRange(from, to)`, `getPhotos()`, …). To move to Supabase,
 rewrite the insides of those functions, using tables for the lists and **Supabase Storage**
 for the photos, and keep the same names and return types. No component needs to change.
 (`lib/idb.ts` is a helper used only by storage.ts.) `onDataChange()` is how cards hear about
@@ -417,19 +503,23 @@ in `index.html` apply dark mode *before* the app loads, so the page never flashe
 ```
 src/
 ├─ main.tsx               Entry point: mounts React, sets reduced-motion for animations
-├─ App.tsx                Page layout: background, header, sections rows, lazy settings
+├─ App.tsx                Page layout: background, dashboard or #/stats page, lazy settings
 ├─ index.css              Tailwind + light/dark color tokens + background animations
 ├─ storage.ts             ★ The only file that reads or writes data (+ migrations)
-├─ types.ts               Data shapes (Daily, Todo, Goal, Idea, Photo, …)
+├─ types.ts               Data shapes (Daily, Todo, Goal, Idea, DayRecord, Photo, …)
 ├─ lib/
 │  ├─ dates.ts            Local-time date helpers (weeks start Sunday)
 │  ├─ todos.ts            Due-date status, friendly labels, sorting, quick dates
 │  ├─ calendar.ts         Month grid (6 weeks from Sunday), task counts per day
+│  ├─ score.ts            Suggested daily target, points parsing
+│  ├─ stats.ts            Streaks and week/month summaries (pure functions)
+│  ├─ useHashRoute.ts     The two-page router (#/stats)
+│  ├─ useElementWidth.ts  Measures a box's width (for drawing the SVG chart at real size)
 │  ├─ useToday.ts         Today's date; re-renders at midnight and when the tab wakes
 │  ├─ settings.tsx        Settings shared via React context (useSettings)
 │  ├─ useTheme.ts         Applies light/dark, follows the system in "system" mode
 │  ├─ useReducedMotion.ts Reads the OS "reduce motion" setting
-│  ├─ backup.ts           Export download + import validation (format v3)
+│  ├─ backup.ts           Export download + import validation (format v4, with history)
 │  ├─ idb.ts              Tiny IndexedDB helper, used only by storage.ts
 │  ├─ resizeImage.ts      Downscales uploads to ≤1600px JPEG
 │  ├─ grainTexture.ts     The noise tile for the living grain
@@ -441,13 +531,16 @@ src/
 │     ├─ ExposureContext.tsx Photos + cached image + when to regenerate
 │     └─ random.ts        Seeded random numbers (reproducible results)
 ├─ components/            Reusable UI: Card, CollapsibleCard, TextForm, DateField, CheckButton,
-│                         IconButton, Tabs, Switch, ProgressRing, AnimatedList, StrikeText,
-│                         Celebration, buttonStyles, PageBackground (the full-page background)
+│                         IconButton, Tabs, Switch, ProgressRing, PointsBadge, AnimatedList,
+│                         StrikeText, Celebration, buttonStyles, PageBackground
 ├─ sections/              One file per dashboard section, plus index.ts (the registry)
+│  │                      and the header pieces (Header, SundayGoalChip)
 │  └─ todo/               To-Do: Todo.tsx (card + data), TodoTaskList.tsx (rows, shared by
 │                         both views), TodoCalendar.tsx (month view)
-│                         and the header pieces (Header, SundayGoalChip)
-├─ settings/              The settings dialog (lazy-loaded) + DoubleExposureSettings
+├─ pages/StatsPage.tsx    The Statistics page (lazy-loaded)
+├─ stats/                 Its parts: Heatmap, ScoreChart (SVG), DayDetails
+├─ settings/              The settings dialog (lazy-loaded) + DoubleExposureSettings,
+│                         DailyTargetSetting
 └─ three/LiveExposure.tsx ★ The only WebGL code: live mode (lazy-loaded, off by default)
 ```
 
