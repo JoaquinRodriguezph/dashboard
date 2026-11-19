@@ -1,4 +1,4 @@
-import { Dices, LoaderCircle, Monitor, Moon, Settings as SettingsIcon, Sun } from 'lucide-react'
+import { ChartColumn, Dices, LoaderCircle, Monitor, Moon, Settings as SettingsIcon, Sun } from 'lucide-react'
 import { useExposure } from '../lib/exposure/ExposureContext'
 import { useNow } from '../lib/useNow'
 import { useSettings } from '../lib/settings'
@@ -22,9 +22,10 @@ function greetingFor(hour: number): string {
 
 interface HeaderProps {
   onOpenSettings: () => void
+  onOpenStats: () => void
 }
 
-export function Header({ onOpenSettings }: HeaderProps) {
+export function Header({ onOpenSettings, onOpenStats }: HeaderProps) {
   const now = useNow() // ticks every minute so the greeting and date stay current
   const { settings, updateSettings } = useSettings()
   const ThemeIcon = THEME_ICON[settings.theme]
@@ -78,6 +79,9 @@ export function Header({ onOpenSettings }: HeaderProps) {
             title={`Theme: ${settings.theme}`}
           >
             <ThemeIcon size={20} />
+          </button>
+          <button type="button" onClick={onOpenStats} className={iconButton} aria-label="Open statistics" title="Statistics">
+            <ChartColumn size={20} />
           </button>
           <button
             type="button"

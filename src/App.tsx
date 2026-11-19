@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react'
 import { animated, Globals, useTrail } from '@react-spring/web'
 import { PageBackground } from './components/PageBackground'
 import { ExposureProvider } from './lib/exposure/ExposureContext'
+import { useHashRoute } from './lib/useHashRoute'
 import { useReducedMotion } from './lib/useReducedMotion'
 import { useSettings } from './lib/settings'
 import { useTheme } from './lib/useTheme'
@@ -11,6 +12,8 @@ import { ROWS, SECTIONS } from './sections'
 // The settings dialog (photo upload, sliders, backup) is only needed once you
 // open it, so it's downloaded on first open instead of at startup.
 const SettingsPanel = lazy(() => import('./settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })))
+// Same for the Statistics page (#/stats): its code and charts load only when you open it.
+const StatsPage = lazy(() => import('./pages/StatsPage'))
 
 export default function App() {
   const { settings, loaded } = useSettings()
@@ -18,6 +21,7 @@ export default function App() {
   const [settingsLoaded, setSettingsLoaded] = useState(false) // true after the first open
   useTheme(settings.theme)
   const reducedMotion = useReducedMotion()
+  const { route, openStats, backToDashboard } = useHashRoute()
 
   // One switch for every React Spring animation in the app.
   useEffect(() => {
@@ -45,13 +49,22 @@ export default function App() {
       <PageBackground reducedMotion={reducedMotion} />
 
       <div className="mx-auto max-w-2xl px-4 pb-16 sm:px-6 lg:max-w-[1600px] lg:px-8">
-        <Header
-          onOpenSettings={() => {
-            setSettingsLoaded(true)
-            setSettingsOpen(true)
-          }}
-        />
-        <Sections />
+        {route === 'stats' ? (
+          <Suspense fallback={null}>
+            <StatsPage onBack={backToDashboard} />
+          </Suspense>
+        ) : (
+          <>
+            <Header
+              onOpenStats={openStats}
+              onOpenSettings={() => {
+                setSettingsLoaded(true)
+                setSettingsOpen(true)
+              }}
+            />
+            <Sections />
+          </>
+        )}
       </div>
 
       {settingsLoaded && (
