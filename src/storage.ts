@@ -14,7 +14,7 @@
 //                  for localStorage), via the helpers in lib/idb.ts
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { toDateKey } from './lib/dates'
+import { addDays, fromDateKey, toDateKey } from './lib/dates'
 import { idbDelete, idbGet, idbGetAll, idbPut, idbReplaceAll } from './lib/idb'
 import { suggestTarget } from './lib/score'
 import type {
@@ -31,6 +31,7 @@ import type {
   ExposureResult,
   Goal,
   GoalList,
+  HistoryDay,
   Idea,
   ImportData,
   Photo,
@@ -290,12 +291,45 @@ const addItem = (date: DateKey, item: DayItem) =>
 const removeItem = (date: DateKey, kind: DayItem['kind'], id: string) =>
   updateDay(date, (r) => ({ ...r, items: r.items.filter((i) => !(i.kind === kind && i.id === id)) }))
 
-/** Reading the score history. */
+/**
+ * Reading the score history. (Writing happens only through ticking dailies and
+ * completing tasks, above, so nothing else can change a day.)
+ * With Supabase this would be a `day_records` table queried by date.
+ */
 export const history = {
   /** One day's record, or null if nothing was completed that day. */
   async getDay(date: DateKey): Promise<DayRecord | null> {
     return readHistory()[date] ?? null
   },
+
+  /**
+   * One entry per day from `from` to `to` (inclusive, "YYYY-MM-DD"), limited to
+   * days from the history start up to today. Days without a record come back as
+   * missed: score 0, and the target that applied then (the latest saved
+   * target before that day, or today's if there's none).
+   */
+  async getRange(from: DateKey, to: DateKey): Promise<HistoryDay[]> {
+    const all = readHistory()
+    const start = await history.getStart()
+    const today = toDateKey(new Date())
+    const first = from > start ? from : start
+    const last = to < today ? to : today
+    if (first > last) return []
+
+    // The target to show for a missed day = the latest target saved before it.
+    const saved = Object.keys(all).sort()
+    let target = all[saved.filter((d) => d < first).pop() ?? '']?.target ?? currentTarget()
+
+    const days: HistoryDay[] = []
+    for (let d = fromDateKey(first); toDateKey(d) <= last; d = addDays(d, 1)) {
+      const key = toDateKey(d)
+      const record = all[key]
+      if (record) target = record.target
+      days.push(record ? { ...record, missed: false } : { date: key, items: [], score: 0, target, reached: false, missed: true })
+    }
+    return days
+  },
+
   /** The first day history was kept. Days before it don't count as missed. */
   async getStart(): Promise<DateKey> {
     return read<DateKey | null>(KEYS.historyStart, null) ?? toDateKey(new Date())
@@ -627,6 +661,8 @@ export async function exportAll(): Promise<AllData> {
     goals: await getGoals(),
     todos: await getTodos(),
     ideas: await getIdeas(),
+    history: readHistory(),
+    historyStart: read<DateKey | null>(KEYS.historyStart, null),
   }
 }
 
@@ -651,4 +687,7 @@ export async function importAll(data: ImportData, photos?: Photo[]): Promise<voi
   // Lists added in later versions: missing from older backups → keep what's here.
   if (data.todos) write(KEYS.todos, data.todos)
   if (data.ideas) write(KEYS.ideas, data.ideas)
+  // Last, so the imported days win over anything saveSettings() just touched.
+  if (data.history) write(KEYS.history, data.history)
+  if (data.historyStart) write(KEYS.historyStart, data.historyStart)
 }

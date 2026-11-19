@@ -1,6 +1,6 @@
 import { DEFAULT_BACKGROUND, DEFAULT_DOUBLE_EXPOSURE, DEFAULT_POINTS, DEFAULT_SETTINGS, exportAll, getPhotos } from '../storage'
 import { toDateKey } from './dates'
-import type { BackgroundSettings, DoubleExposureSettings, ImportData, Photo, Settings, Todo } from '../types'
+import type { BackgroundSettings, DateKey, DayItem, DayRecord, DoubleExposureSettings, ImportData, Photo, Settings, Todo } from '../types'
 
 // A backup file looks like:
 //   { "app": "personal-dashboard", "version": 2, "exportedAt": "...",
@@ -11,10 +11,12 @@ import type { BackgroundSettings, DoubleExposureSettings, ImportData, Photo, Set
 //   1: original format (no photos, no doubleExposure settings)
 //   2: adds settings.doubleExposure and an optional "photos" list
 //   3: adds "todos" and "ideas" (optional on import: a file without them keeps your current ones)
+//   4: adds points on dailies/tasks, settings.dailyTarget, "history" and "historyStart"
+//      (missing points → 10; a file without history keeps your current history)
 // Older versions are still accepted; missing fields get their defaults.
 
 const APP_ID = 'personal-dashboard'
-const VERSION = 3
+const VERSION = 4
 const MAX_FILE_BYTES = 100 * 1024 * 1024 // photos make backups big
 
 /** How a photo is written in the JSON file: the JPEG as a base64 "data URL". */
@@ -183,7 +185,41 @@ function validateData(d: Obj): ImportData {
             todoId: optStr(v, 'todoId', w),
             addedToTodoAt: optStr(v, 'addedToTodoAt', w),
           })),
+    history: d.history === undefined ? undefined : validateHistory(d.history),
+    historyStart: d.historyStart === undefined || d.historyStart === null ? undefined : dateKey(d.historyStart, 'historyStart'),
   }
+}
+
+function dateKey(v: unknown, where: string): DateKey {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : fail(`${where} should be a date like 2026-11-19`)
+}
+
+/**
+ * The score history: { "2026-11-19": DayRecord, … }. Every record is checked,
+ * and its score and "reached" are recalculated from its items, so a hand-edited
+ * file can't contain a total that doesn't add up.
+ */
+function validateHistory(raw: unknown): Record<DateKey, DayRecord> {
+  if (!isObj(raw)) fail('"history" should be an object of days')
+  const out: Record<DateKey, DayRecord> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    const where = `history ${key}`
+    dateKey(key, where)
+    if (!isObj(value)) fail(`${where} is not an object`)
+    if (value.date !== key) fail(`${where}: "date" doesn't match`)
+    const items = list(value, 'items', (v, item): DayItem => {
+      const w = `${where} ${item}` // e.g. "history 2026-11-17 items #1", so the message says which day
+      if (v.kind !== 'daily' && v.kind !== 'todo') fail(`${w}: "kind" should be "daily" or "todo"`)
+      // NaN as the fallback = "points are required here" (checked just below).
+      return { kind: v.kind, id: str(v, 'id', w), name: str(v, 'name', w), points: points(v, 'points', w, NaN), at: str(v, 'at', w) }
+    })
+    if (items.some((i) => Number.isNaN(i.points))) fail(`${where}: every item needs points`)
+    const target = points(value, 'target', where, NaN)
+    if (Number.isNaN(target)) fail(`${where}: "target" is missing`)
+    const score = items.reduce((sum, i) => sum + i.points, 0)
+    out[key] = { date: key, items, score, target, reached: score >= target && score > 0, reachedAt: optStr(value, 'reachedAt', where) }
+  }
+  return out
 }
 
 function validateTodo(v: Obj, w: string): Todo {

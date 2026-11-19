@@ -136,6 +136,12 @@ export interface DailyChecks {
   doneIds: string[]
 }
 
+/**
+ * One day in a history range: a saved record, or a "missed" day with no
+ * activity (score 0). Missed days aren't stored; they're filled in when read.
+ */
+export type HistoryDay = DayRecord & { missed: boolean }
+
 /** One week's major goal. `weekStart` is the Sunday that week begins on. */
 export interface WeeklyGoal {
   weekStart: DateKey
@@ -171,6 +177,10 @@ export interface AllData {
   goals: Goal[]
   todos: Todo[]
   ideas: Idea[]
+  /** Every saved day, keyed by date. */
+  history: Record<DateKey, DayRecord>
+  /** The first day history was kept. */
+  historyStart: DateKey | null
 }
 
 /** Something I could do. Can be sent to the To-Do list, after which it's marked as added. */
@@ -187,4 +197,5 @@ export interface Idea {
  * What an import provides. Lists that were added in later versions are optional:
  * an older backup doesn't have them, and importing it keeps the current ones.
  */
-export type ImportData = Omit<AllData, 'todos' | 'ideas'> & Partial<Pick<AllData, 'todos' | 'ideas'>>
+type AddedLater = 'todos' | 'ideas' | 'history' | 'historyStart'
+export type ImportData = Omit<AllData, AddedLater> & Partial<Pick<AllData, AddedLater>>
