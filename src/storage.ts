@@ -14,7 +14,9 @@
 //                  for localStorage), via the helpers in lib/idb.ts
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { toDateKey } from './lib/dates'
 import { idbDelete, idbGet, idbGetAll, idbPut, idbReplaceAll } from './lib/idb'
+import { suggestTarget } from './lib/score'
 import type {
   BackgroundSettings,
   AllData,
@@ -22,6 +24,8 @@ import type {
   Daily,
   DailyChecks,
   DateKey,
+  DayItem,
+  DayRecord,
   DevicePrefs,
   DoubleExposureSettings,
   ExposureResult,
@@ -46,7 +50,12 @@ const KEYS = {
   goals: 'goals',
   todos: 'todos',
   ideas: 'ideas',
+  history: 'history',
+  historyStart: 'historyStart',
 } as const
+
+/** What a new daily or task is worth unless you choose otherwise. */
+export const DEFAULT_POINTS = 10
 
 /** Read a JSON value, falling back if it's missing or corrupted. */
 function read<T>(key: string, fallback: T): T {
@@ -96,7 +105,7 @@ const nowIso = () => new Date().toISOString()
 // once at startup (App waits for it before showing any section).
 
 const SCHEMA_KEY = 'dash.schemaVersion'
-const CURRENT_SCHEMA = 5
+const CURRENT_SCHEMA = 6
 
 const MIGRATIONS: Record<number, () => void> = {
   // v1 → v2: settings gained `doubleExposure`. Fill in its defaults.
@@ -121,6 +130,27 @@ const MIGRATIONS: Record<number, () => void> = {
     const stored = read<Partial<Settings> | null>(KEYS.settings, null)
     if (stored) write(KEYS.settings, mergeSettings(stored))
   },
+  // v5 → v6: points and history.
+  //  - every existing daily and task is worth 10 points
+  //  - the daily target starts at the suggested value for your dailies
+  //  - anything already ticked or completed today goes into today's record,
+  //    so nothing done on the day of the update is lost
+  6: () => {
+    const dailies = read<Partial<Daily>[]>(KEYS.dailies, []).map((d) => ({ ...d, points: d.points ?? DEFAULT_POINTS }) as Daily)
+    const todos = read<Partial<Todo>[]>(KEYS.todos, []).map((t) => ({ ...t, points: t.points ?? DEFAULT_POINTS }) as Todo)
+    write(KEYS.dailies, dailies)
+    write(KEYS.todos, todos)
+    const stored = read<Partial<Settings>>(KEYS.settings, {})
+    write(KEYS.settings, mergeSettings({ ...stored, dailyTarget: stored.dailyTarget ?? suggestTarget(dailies) }))
+
+    const today = toDateKey(new Date())
+    const checks = read<DailyChecks | null>(KEYS.dailyChecks, null)
+    const doneToday: DayItem[] = [
+      ...(checks?.date === today ? dailies.filter((d) => checks.doneIds.includes(d.id)) : []).map((d) => dailyItem(d)),
+      ...todos.filter((t) => t.completed && t.completedAt && toDateKey(new Date(t.completedAt)) === today).map((t) => todoItem(t, t.completedAt)),
+    ]
+    if (doneToday.length > 0) updateDay(today, (r) => ({ ...r, items: doneToday }))
+  },
 }
 
 function storedSchemaVersion(): number {
@@ -142,6 +172,9 @@ export function initStorage(): Promise<void> {
       localStorage.setItem(SCHEMA_KEY, String(v))
     }
     localStorage.setItem(SCHEMA_KEY, String(CURRENT_SCHEMA))
+    // History starts the first day this version runs (on a brand-new install too,
+    // where no migration ran). Days before it never count as "missed".
+    if (read<DateKey | null>(KEYS.historyStart, null) === null) write(KEYS.historyStart, toDateKey(new Date()))
   })()
   return ready
 }
@@ -172,6 +205,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   hideCompletedGoals: false,
   hideCompletedTodos: false,
+  dailyTarget: 50,
   doubleExposure: DEFAULT_DOUBLE_EXPOSURE,
   background: DEFAULT_BACKGROUND,
 }
@@ -191,7 +225,10 @@ export async function getSettings(): Promise<Settings> {
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {
+  const targetChanged = read<Partial<Settings>>(KEYS.settings, {}).dailyTarget !== settings.dailyTarget
   write(KEYS.settings, settings)
+  // Today's record is still "live", so it follows a new target. Past days keep theirs.
+  if (targetChanged && readHistory()[toDateKey(new Date())]) updateDay(toDateKey(new Date()), (r) => r)
   // A plain local copy of the theme, read by the tiny script in index.html
   // before React loads (to avoid a white flash). Keep this even with Supabase.
   try {
@@ -199,6 +236,70 @@ export async function saveSettings(settings: Settings): Promise<void> {
   } catch {
     /* storage full or blocked; not critical */
   }
+}
+
+// ── Score history ────────────────────────────────────────────────────────────
+// One DayRecord per day with activity, stored as { "2026-11-19": record, … }.
+// The record IS the day's score: ticking a daily or completing a task adds a
+// snapshot item to TODAY's record, unticking removes it. Only today's record is
+// ever written, so a past day can't change: there's nothing to "close" at
+// midnight, and it works the same whether the app stayed open or was closed.
+
+function readHistory(): Record<DateKey, DayRecord> {
+  return read<Record<DateKey, DayRecord>>(KEYS.history, {})
+}
+
+function currentTarget(): number {
+  return mergeSettings(read<Partial<Settings>>(KEYS.settings, {})).dailyTarget
+}
+
+/** A snapshot of a daily as it is right now. */
+function dailyItem(d: Daily): DayItem {
+  return { kind: 'daily', id: d.id, name: d.title, points: d.points, at: nowIso() }
+}
+
+/** A snapshot of a task as it is right now. */
+function todoItem(t: Todo, at = nowIso()): DayItem {
+  return { kind: 'todo', id: t.id, name: t.text, points: t.points, at }
+}
+
+/**
+ * Changes one day's record (in practice always today's), then recalculates its
+ * score and whether the target is reached, using the current target.
+ * `reachedAt` is set the first time the target is hit and never cleared, so the
+ * celebration plays once per day even if you untick and tick again.
+ */
+function updateDay(date: DateKey, change: (record: DayRecord) => DayRecord): void {
+  const all = readHistory()
+  const target = currentTarget()
+  const before = all[date] ?? { date, items: [], score: 0, target, reached: false }
+  const changed = change({ ...before, target })
+  const score = changed.items.reduce((sum, item) => sum + item.points, 0)
+  const reached = score >= target && score > 0
+  const next: DayRecord = { ...changed, score, reached, reachedAt: changed.reachedAt ?? (reached ? nowIso() : undefined) }
+
+  // Everything unticked again and the target never reached: no activity → no record.
+  if (next.items.length === 0 && !next.reachedAt) delete all[date]
+  else all[date] = next
+  write(KEYS.history, all)
+}
+
+const addItem = (date: DateKey, item: DayItem) =>
+  updateDay(date, (r) => ({ ...r, items: [...r.items.filter((i) => !(i.kind === item.kind && i.id === item.id)), item] }))
+
+const removeItem = (date: DateKey, kind: DayItem['kind'], id: string) =>
+  updateDay(date, (r) => ({ ...r, items: r.items.filter((i) => !(i.kind === kind && i.id === id)) }))
+
+/** Reading the score history. */
+export const history = {
+  /** One day's record, or null if nothing was completed that day. */
+  async getDay(date: DateKey): Promise<DayRecord | null> {
+    return readHistory()[date] ?? null
+  },
+  /** The first day history was kept. Days before it don't count as missed. */
+  async getStart(): Promise<DateKey> {
+    return read<DateKey | null>(KEYS.historyStart, null) ?? toDateKey(new Date())
+  },
 }
 
 // ── Device preferences ───────────────────────────────────────────────────────
@@ -238,7 +339,7 @@ export async function saveDevicePrefs(prefs: DevicePrefs): Promise<void> {
 // ── Dailies ──────────────────────────────────────────────────────────────────
 
 export async function getDailies(): Promise<Daily[]> {
-  return read<Daily[]>(KEYS.dailies, [])
+  return read<Daily[]>(KEYS.dailies, []).map((d) => ({ ...d, points: d.points ?? DEFAULT_POINTS }))
 }
 
 export async function addDaily(input: Omit<Daily, 'id'>): Promise<Daily[]> {
@@ -290,6 +391,10 @@ export async function setDailyChecked(today: DateKey, id: string, checked: boole
   const current = await getDailyChecks(today)
   const doneIds = checked ? [...new Set([...current, id])] : current.filter((x) => x !== id)
   write(KEYS.dailyChecks, { date: today, doneIds } satisfies DailyChecks)
+  // Score: ticking adds the daily (as it is now) to today's record, unticking removes it.
+  const daily = (await getDailies()).find((d) => d.id === id)
+  if (checked && daily) addItem(today, dailyItem(daily))
+  if (!checked) removeItem(today, 'daily', id)
   return doneIds
 }
 
@@ -429,27 +534,36 @@ export async function ideaToTodo(ideaId: string, dueDate?: DateKey): Promise<Ide
 // ── To-Do ────────────────────────────────────────────────────────────────────
 
 export async function getTodos(): Promise<Todo[]> {
-  return read<Todo[]>(KEYS.todos, [])
+  return read<Todo[]>(KEYS.todos, []).map((t) => ({ ...t, points: t.points ?? DEFAULT_POINTS }))
 }
 
-export async function addTodo(input: { text: string; dueDate?: DateKey }): Promise<Todo[]> {
-  const todos = [...(await getTodos()), { ...input, id: newId(), completed: false, createdAt: nowIso() }]
+export async function addTodo(input: { text: string; dueDate?: DateKey; points?: number }): Promise<Todo[]> {
+  const todos = [...(await getTodos()), { ...input, points: input.points ?? DEFAULT_POINTS, id: newId(), completed: false, createdAt: nowIso() }]
   write(KEYS.todos, todos)
   return todos
 }
 
-export async function updateTodo(id: string, patch: { text?: string; dueDate?: DateKey }): Promise<Todo[]> {
+export async function updateTodo(id: string, patch: { text?: string; dueDate?: DateKey; points?: number }): Promise<Todo[]> {
   // Passing `dueDate: undefined` in the patch removes the date.
   const todos = (await getTodos()).map((t) => (t.id === id ? { ...t, ...patch } : t))
   write(KEYS.todos, todos)
   return todos
 }
 
+/**
+ * Completing a task adds its points to the day you complete it (whatever its
+ * due date). Un-completing removes them only if it was completed TODAY: earlier
+ * days are final, so a task finished last week stays in last week's history.
+ */
 export async function setTodoCompleted(id: string, completed: boolean): Promise<Todo[]> {
+  const before = (await getTodos()).find((t) => t.id === id)
+  const today = toDateKey(new Date())
   const todos = (await getTodos()).map((t) =>
     t.id === id ? { ...t, completed, completedAt: completed ? nowIso() : undefined } : t,
   )
   write(KEYS.todos, todos)
+  if (before && completed) addItem(today, todoItem(before))
+  if (before && !completed && before.completedAt && toDateKey(new Date(before.completedAt)) === today) removeItem(today, 'todo', id)
   return todos
 }
 

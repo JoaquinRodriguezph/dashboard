@@ -3,10 +3,13 @@ import { animated, useSpring } from '@react-spring/web'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { buttonClass } from '../../components/buttonStyles'
 import { IconButton } from '../../components/IconButton'
+import { pointsField } from '../../components/PointsBadge'
 import { TextForm } from '../../components/TextForm'
 import { addDaysKey, isInMonth, monthGrid, monthLabel, monthOf, shiftMonth, tasksByDay, type DayInfo, type MonthRef } from '../../lib/calendar'
 import { fromDateKey, toDateKey } from '../../lib/dates'
+import { parsePoints } from '../../lib/score'
 import { sortTodos } from '../../lib/todos'
+import { DEFAULT_POINTS } from '../../storage'
 import type { DateKey, Todo } from '../../types'
 import { TodoTaskList, type TodoActions } from './TodoTaskList'
 
@@ -16,7 +19,7 @@ interface TodoCalendarProps extends TodoActions {
   todos: Todo[]
   today: DateKey
   hideCompleted: boolean
-  onAdd: (input: { text: string; dueDate?: DateKey }) => void
+  onAdd: (input: { text: string; dueDate?: DateKey; points: number }) => void
 }
 
 const longDate = (key: DateKey) => fromDateKey(key).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
@@ -191,9 +194,9 @@ export function TodoCalendar({ todos, today, hideCompleted, onAdd, ...actions }:
           {adding ? (
             <TextForm
               key={selected}
-              fields={[{ name: 'text', placeholder: `Task for ${shortDate(selected)}`, required: true }]}
+              fields={[{ name: 'text', placeholder: `Task for ${shortDate(selected)}`, required: true }, pointsField()]}
               submitLabel="Add"
-              onSubmit={({ text }) => onAdd({ text, dueDate: selected })}
+              onSubmit={({ text, points }) => onAdd({ text, dueDate: selected, points: parsePoints(points) ?? DEFAULT_POINTS })}
               onCancel={() => setAdding(false)}
               clearOnSubmit
             />

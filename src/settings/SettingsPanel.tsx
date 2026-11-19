@@ -4,6 +4,7 @@ import { IconButton } from '../components/IconButton'
 import { downloadBackup, parseBackupFile } from '../lib/backup'
 import { useSettings } from '../lib/settings'
 import { importAll } from '../storage'
+import { DailyTargetSetting } from './DailyTargetSetting'
 import { DoubleExposureSettings } from './DoubleExposureSettings'
 import type { ThemePreference } from '../types'
 import { buttonClass } from '../components/buttonStyles'
@@ -127,6 +128,8 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               ))}
             </div>
           </fieldset>
+
+          <DailyTargetSetting />
 
           <DoubleExposureSettings />
 

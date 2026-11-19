@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { animated, useSpring } from '@react-spring/web'
 import {
   DndContext,
@@ -21,22 +21,28 @@ import { Card } from '../components/Card'
 import { Celebration } from '../components/Celebration'
 import { CheckButton } from '../components/CheckButton'
 import { IconButton } from '../components/IconButton'
+import { PointsBadge, pointsField } from '../components/PointsBadge'
 import { ProgressRing } from '../components/ProgressRing'
 import { StrikeText } from '../components/StrikeText'
 import { TextForm, type TextField } from '../components/TextForm'
+import { parsePoints } from '../lib/score'
+import { useSettings } from '../lib/settings'
 import { useToday } from '../lib/useToday'
 import { normalizeUrl } from '../lib/url'
 import {
+  DEFAULT_POINTS,
   addDaily,
   deleteDaily,
   getDailies,
   getDailyChecks,
+  history,
   moveDaily,
+  onDataChange,
   setDailyOrder,
   setDailyChecked,
   updateDaily,
 } from '../storage'
-import type { Daily } from '../types'
+import type { Daily, DayRecord } from '../types'
 
 function dailyFields(daily?: Daily): TextField[] {
   return [
@@ -48,6 +54,7 @@ function dailyFields(daily?: Daily): TextField[] {
       type: 'url',
       validate: (v) => (v && !normalizeUrl(v) ? "That doesn't look like a web address" : null),
     },
+    pointsField(daily?.points),
   ]
 }
 
@@ -66,10 +73,11 @@ function announcements(dailies: Daily[]): Announcements {
   }
 }
 
-function progressLabel(done: number, total: number): string {
-  if (done === total) return 'All done for today 🎉'
-  const left = total - done
-  return `${left} left today`
+/** Under the title: how many dailies are done, and how far from the target. */
+function progressLabel(done: number, total: number, score: number, target: number): string {
+  const count = total > 0 ? `${done} of ${total} done` : 'No dailies yet'
+  if (score >= target && score > 0) return `${count} · Target reached 🎉`
+  return `${count} · ${target - score} pts to go`
 }
 
 export function Dailies() {
@@ -80,7 +88,30 @@ export function Dailies() {
   const [managing, setManaging] = useState(false) // shows reorder/edit/delete buttons
   const [editingId, setEditingId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
-  const [celebrate, setCelebrate] = useState(0) // bump to fire the "all done" burst
+  const [celebrate, setCelebrate] = useState(0) // bump to fire the "target reached" burst
+  const { settings } = useSettings()
+  const target = settings.dailyTarget
+
+  // Today's score lives in today's history record. It changes when a daily is
+  // ticked here, but also when a To-Do task is completed elsewhere, so reload
+  // it whenever storage says the history changed.
+  const [record, setRecord] = useState<DayRecord | null>(null)
+  const reachedBefore = useRef<boolean | null>(null) // null = not loaded yet
+  useEffect(() => {
+    const load = () =>
+      history.getDay(today).then((r) => {
+        setRecord(r)
+        // Celebrate only the moment reachedAt first appears. On page load (or the
+        // next day) it's just remembered, so a reload never celebrates again.
+        const reachedNow = !!r?.reachedAt
+        if (reachedBefore.current === false && reachedNow) setCelebrate((c) => c + 1)
+        reachedBefore.current = reachedNow
+      })
+    reachedBefore.current = null
+    void load()
+    return onDataChange((key) => key === 'history' && void load())
+  }, [today])
+  const score = record?.score ?? 0
 
   // Loads tasks and today's checks together, and again whenever `today` changes
   // (at midnight), which clears the checks. The list renders only after the
@@ -96,19 +127,16 @@ export function Dailies() {
   const doneCount = dailies.filter((d) => doneIds.includes(d.id)).length
 
   const toggle = async (daily: Daily, checked: boolean) => {
-    const next = await setDailyChecked(today, daily.id, checked)
-    setDoneIds(next)
-    const allDone = dailies.length > 0 && dailies.every((d) => next.includes(d.id))
-    if (checked && allDone) setCelebrate((c) => c + 1)
+    setDoneIds(await setDailyChecked(today, daily.id, checked))
   }
 
-  const handleAdd = async ({ title, url }: Record<string, string>) => {
-    setDailies(await addDaily({ title, url: normalizeUrl(url) }))
+  const handleAdd = async ({ title, url, points }: Record<string, string>) => {
+    setDailies(await addDaily({ title, url: normalizeUrl(url), points: parsePoints(points) ?? DEFAULT_POINTS }))
     // Keep the form open so several tasks can be added in a row.
   }
 
-  const handleEdit = async (id: string, { title, url }: Record<string, string>) => {
-    setDailies(await updateDaily(id, { title, url: normalizeUrl(url) }))
+  const handleEdit = async (id: string, { title, url, points }: Record<string, string>) => {
+    setDailies(await updateDaily(id, { title, url: normalizeUrl(url), points: parsePoints(points) ?? DEFAULT_POINTS }))
     setEditingId(null)
   }
 
@@ -147,14 +175,12 @@ export function Dailies() {
       title="Dailies"
       variant="featured"
       leading={
-        dailies.length > 0 && (
-          <div className="relative">
-            <ProgressRing done={doneCount} total={dailies.length} />
-            <Celebration trigger={celebrate} />
-          </div>
-        )
+        <div className="relative">
+          <ProgressRing value={score} max={target} unit="pts" label={`${score} of ${target} points today`} size={84} />
+          <Celebration trigger={celebrate} />
+        </div>
       }
-      meta={dailies.length > 0 && progressLabel(doneCount, dailies.length)}
+      meta={progressLabel(doneCount, dailies.length, score, target)}
       actions={
         dailies.length > 0 && (
           <button
@@ -297,6 +323,7 @@ function DailyRow({ daily, done, onToggle, managing, isFirst, isLast, onMove, on
           <StrikeText struck={done}>{daily.title}</StrikeText>
         </span>
       )}
+      <PointsBadge points={daily.points} muted={done} />
 
       {managing ? (
         <>

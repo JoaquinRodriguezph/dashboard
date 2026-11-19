@@ -10,8 +10,11 @@ export interface TextField {
   /**
    * "url" shows the URL keyboard on phones (validation is up to `validate`).
    * "date" shows a date picker with quick chips; the value is "YYYY-MM-DD" or "".
+   * "number" shows a small number box (e.g. points); the value is still a string.
    */
-  type?: 'text' | 'url' | 'date'
+  type?: 'text' | 'url' | 'date' | 'number'
+  /** Text after a number box, e.g. "pts". */
+  suffix?: string
   /** Return an error message to block saving, or null if the value is fine. */
   validate?: (value: string) => string | null
 }
@@ -57,6 +60,8 @@ export function TextForm({ fields, submitLabel, onSubmit, onCancel, clearOnSubmi
   return (
     <form
       onSubmit={handleSubmit}
+      // Our own `validate` messages instead of the browser's tooltips (e.g. for max on number boxes).
+      noValidate
       onKeyDown={(e) => e.key === 'Escape' && onCancel?.()}
       className="flex flex-col gap-2 rounded-xl border border-line bg-bg/60 p-2"
     >
@@ -68,6 +73,23 @@ export function TextForm({ fields, submitLabel, onSubmit, onCancel, clearOnSubmi
               onChange={(value) => setValues((v) => ({ ...v, [f.name]: value }))}
               label={f.placeholder}
             />
+          ) : f.type === 'number' ? (
+            // A small number box with a unit after it, e.g. [ 10 ] pts
+            <label className="flex items-center gap-2 px-1 text-sm text-muted">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={999}
+                step={1}
+                value={values[f.name]}
+                onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                aria-label={f.placeholder}
+                aria-invalid={!!errors[f.name]}
+                className="w-20 rounded-lg border border-line bg-surface px-2 py-1.5 text-base text-fg tabular-nums outline-none focus:border-accent aria-invalid:border-danger sm:text-sm"
+              />
+              {f.suffix}
+            </label>
           ) : (
             <input
               type="text"

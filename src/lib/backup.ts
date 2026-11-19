@@ -1,4 +1,4 @@
-import { DEFAULT_BACKGROUND, DEFAULT_DOUBLE_EXPOSURE, DEFAULT_SETTINGS, exportAll, getPhotos } from '../storage'
+import { DEFAULT_BACKGROUND, DEFAULT_DOUBLE_EXPOSURE, DEFAULT_POINTS, DEFAULT_SETTINGS, exportAll, getPhotos } from '../storage'
 import { toDateKey } from './dates'
 import type { BackgroundSettings, DoubleExposureSettings, ImportData, Photo, Settings, Todo } from '../types'
 
@@ -90,6 +90,14 @@ function num(o: Obj, key: string, where: string): number {
   return typeof o[key] === 'number' && Number.isFinite(o[key]) ? (o[key] as number) : fail(`${where}: "${key}" should be a number`)
 }
 
+/** Points: a whole number 0–999. Missing (older backups) → the default; anything else is an error. */
+function points(o: Obj, key: string, where: string, fallback = DEFAULT_POINTS): number {
+  const v = o[key]
+  if (v === undefined) return fallback
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > 999) fail(`${where}: "${key}" should be a whole number from 0 to 999`)
+  return v
+}
+
 function list<T>(o: Obj, key: string, item: (v: Obj, where: string) => T): T[] {
   const arr = o[key]
   if (!Array.isArray(arr)) fail(`"${key}" should be a list`)
@@ -134,6 +142,7 @@ function validateData(d: Obj): ImportData {
     theme,
     hideCompletedGoals: typeof s.hideCompletedGoals === 'boolean' ? s.hideCompletedGoals : DEFAULT_SETTINGS.hideCompletedGoals,
     hideCompletedTodos: typeof s.hideCompletedTodos === 'boolean' ? s.hideCompletedTodos : DEFAULT_SETTINGS.hideCompletedTodos,
+    dailyTarget: points(s, 'dailyTarget', 'settings', DEFAULT_SETTINGS.dailyTarget), // absent before v4 → default
     doubleExposure: validateDoubleExposure(s.doubleExposure), // absent in v1 backups → defaults
     background: validateBackground(s.background), // absent before v3 → defaults
   }
@@ -143,7 +152,7 @@ function validateData(d: Obj): ImportData {
 
   return {
     settings,
-    dailies: list(d, 'dailies', (v, w) => ({ id: str(v, 'id', w), title: str(v, 'title', w), url: optStr(v, 'url', w) })),
+    dailies: list(d, 'dailies', (v, w) => ({ id: str(v, 'id', w), title: str(v, 'title', w), url: optStr(v, 'url', w), points: points(v, 'points', w) })),
     dailyChecks: { date: typeof c.date === 'string' ? c.date : '', doneIds },
     weeklyGoals: list(d, 'weeklyGoals', (v, w) => {
       const weekStart = str(v, 'weekStart', w)
@@ -187,6 +196,7 @@ function validateTodo(v: Obj, w: string): Todo {
     completed: bool(v, 'completed', w),
     createdAt: str(v, 'createdAt', w),
     completedAt: optStr(v, 'completedAt', w),
+    points: points(v, 'points', w),
   }
 }
 

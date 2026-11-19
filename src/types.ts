@@ -10,6 +10,8 @@ export interface Settings {
   theme: ThemePreference
   hideCompletedGoals: boolean
   hideCompletedTodos: boolean
+  /** Points needed for a "good day". */
+  dailyTarget: number
   doubleExposure: DoubleExposureSettings
   background: BackgroundSettings
 }
@@ -47,6 +49,8 @@ export interface Todo {
   completed: boolean
   createdAt: string
   completedAt?: string
+  /** What completing it is worth (whole number, 0–999). */
+  points: number
 }
 
 /**
@@ -91,6 +95,36 @@ export interface Daily {
   id: string
   title: string
   url?: string
+  /** What ticking it off is worth (whole number, 0–999). */
+  points: number
+}
+
+/** One thing completed on a day, as it was AT THAT MOMENT (a snapshot). */
+export interface DayItem {
+  kind: 'daily' | 'todo'
+  /** The daily's or task's id, so unticking can find it again. */
+  id: string
+  name: string
+  points: number
+  /** When it was completed (ISO timestamp). */
+  at: string
+}
+
+/**
+ * Everything about one day's score. Only today's record ever changes; once the
+ * date is in the past, the record is final. Names, points and the target are
+ * copied in, so editing or deleting items (or the target) later never changes it.
+ */
+export interface DayRecord {
+  date: DateKey
+  items: DayItem[]
+  /** Sum of the items' points. */
+  score: number
+  /** The daily target that applied on this day. */
+  target: number
+  reached: boolean
+  /** The first moment the target was reached that day: the celebration plays only once. */
+  reachedAt?: string
 }
 
 /**

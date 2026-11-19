@@ -81,7 +81,7 @@ export function Todo() {
       setTodos(await deleteTodo(t.id))
     },
   }
-  const add = async (input: { text: string; dueDate?: DateKey }) => setTodos(await addTodo(input))
+  const add = async (input: { text: string; dueDate?: DateKey; points: number }) => setTodos(await addTodo(input))
 
   const handleClearCompleted = async () => {
     if (!window.confirm(`Permanently delete ${completedCount} completed task${completedCount === 1 ? '' : 's'}?`)) return
